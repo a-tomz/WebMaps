@@ -16,36 +16,49 @@
 <div id="map"></div>
 
 <script>
-    const map = new maplibregl.Map({
-        container: 'map',
-        // This is a basic OpenStreetMap-based style
-        style: 'https://demotiles.maplibre.org/style.json', 
-        center: [-98.5, 39.8], // [Longitude, Latitude] - Center of USA
-        zoom: 3
+const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://demotiles.maplibre.org/style.json', 
+    center: [-79.64, 43.59], // Centered on Mississauga/GTA
+    zoom: 11
+});
+
+map.on('load', () => {
+    map.addSource('bus-stops', {
+        type: 'geojson',
+        data: './data/stops.geojson' 
     });
 
-    map.on('load', () => {
-        // 1. ADD THE DATA SOURCE
-        map.addSource('my-gis-data', {
-            type: 'geojson',
-            // IMPORTANT: Change 'your-file-name.geojson' to your actual filename
-            data: './data/your-file-name.geojson' 
-        });
-
-        // 2. ADD THE VISUAL LAYER
-        map.addLayer({
-            'id': 'my-layer',
-            'type': 'circle', // Change to 'fill' for polygons or 'line' for roads
-            'source': 'my-gis-data',
-            'paint': {
-                'circle-color': '#ff5500',
-                'circle-radius': 6,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff'
-            }
-        });
+    map.addLayer({
+        'id': 'stops-layer',
+        'type': 'circle',
+        'source': 'bus-stops',
+        'paint': {
+            'circle-radius': 6,
+            'circle-color': '#007cbf', // Nice Blue
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+        }
     });
+
+    // POPUP LOGIC: Click a stop to see the Route Number
+    map.on('click', 'stops-layer', (e) => {
+        const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
+        const route = e.features[0].properties.Route;
+        const stopNum = e.features[0].properties.StopNumber;
+
+        new maplibregl.Popup()
+            .setLngLat(coordinates)
+            .setHTML(`<strong>Route:</strong> ${route}<br><strong>Stop #:</strong> ${stopNum}`)
+            .addTo(map);
+    });
+
+    // Change cursor to pointer on hover
+    map.on('mouseenter', 'stops-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'stops-layer', () => { map.getCanvas().style.cursor = ''; });
+});
 </script>
 
 </body>
 </html>
+
