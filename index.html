@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit - Detailed Cluster Map</title>
+    <title>GTA Transit - Cluster Map</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
-        /* Popup Styling */
         .maplibregl-popup-content {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
             padding: 12px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         th { border-bottom: 2px solid #eee; text-align: left; padding: 4px; font-size: 12px; }
@@ -29,26 +27,66 @@
 <script>
     const map = new maplibregl.Map({
         container: 'map',
-        // Simple base style to host our layers
-        style: {
-            "version": 8,
-            "sources": {},
-            "layers": []
-        },
+        // Using a hosted style ensures Glyphs (fonts) and Sprites are available
+        style: 'https://demotiles.maplibre.org/style.json', 
         center: [-79.644, 43.595],
         zoom: 10
     });
 
     map.on('load', () => {
-        // 1. ADD ESRI SATELLITE BASEMAP
+        // 1. ADD ESRI SATELLITE
         map.addSource('esri-imagery', {
             'type': 'raster',
             'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
             'tileSize': 256,
             'attribution': 'Tiles &copy; Esri'
         });
-        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' });
+        
+        // Add satellite layer at the very bottom (index 0)
+        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' }, map.getStyle().layers[0].id);
 
-        // 2. ADD DATA SOURCE WITH CLUSTERING
+        // 2. ADD GEOJSON DATA
         map.addSource('bus-stops', {
             type: 'geojson',
+            data: './data/stops.geojson', 
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 40 
+        });
+
+        // 3. CLUSTER CIRCLES
+        map.addLayer({
+            id: 'clusters',
+            type: 'circle',
+            source: 'bus-stops',
+            filter: ['has', 'point_count'],
+            paint: {
+                'circle-color': '#0062d2',
+                'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        // 4. CLUSTER LABELS
+        map.addLayer({
+            id: 'cluster-count',
+            type: 'symbol',
+            source: 'bus-stops',
+            filter: ['has', 'point_count'],
+            layout: {
+                'text-field': '{point_count_abbreviated}',
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 14
+            },
+            paint: { 'text-color': '#ffffff' }
+        });
+
+        // 5. INDIVIDUAL POINTS
+        map.addLayer({
+            id: 'unclustered-point',
+            type: 'circle',
+            source: 'bus-stops',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+                'circle
