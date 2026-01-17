@@ -24,109 +24,37 @@
 <div id="map"></div>
 
 <script>
-const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://demotiles.maplibre.org/style.json', 
-    center: [-79.644, 43.595], 
-    zoom: 10
-});
-
-map.on('load', () => {
-    // 1. ADD ESRI SATELLITE
-    map.addSource('esri-imagery', {
-        'type': 'raster',
-        'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        'tileSize': 256
-    });
-    map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' });
-
-    // 2. ADD DATA SOURCE WITH CLUSTERING ENABLED
-    map.addSource('bus-stops', {
-        type: 'geojson',
-        data: './data/stops.geojson',
-        cluster: true,
-        clusterMaxZoom: 14, // Max zoom to cluster points on
-        clusterRadius: 50   // Radius of each cluster when clustering points
-    });
-
-    // 3. LAYER: THE CLUSTERS (The large blue circles)
-    map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: 'bus-stops',
-        filter: ['has', 'point_count'],
-        paint: {
-            'circle-color': '#0062d2', // Blue like your image
-            'circle-radius': [
-                'step',
-                ['get', 'point_count'],
-                20, 100,  // 20px radius for < 100 points
-                30, 750,  // 30px radius for points between 100 and 750
-                40        // 40px radius for > 750 points
-            ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-        }
-    });
-
-    // 4. LAYER: CLUSTER COUNTS (The numbers)
-    map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: 'bus-stops',
-        filter: ['has', 'point_count'],
-        layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-font': ['Open Sans Bold'],
-            'text-size': 14
-        },
-        paint: {
-            'text-color': '#ffffff'
-        }
-    });
-
-    // 5. LAYER: INDIVIDUAL POINTS (When unclustered)
-    map.addLayer({
-        id: 'unclustered-point',
-        type: 'circle',
-        source: 'bus-stops',
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-            'circle-color': '#f1c40f',
-            'circle-radius': 6,
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#fff'
-        }
-    });
-
-    // CLICK TO ZOOM INTO A CLUSTER
-    map.on('click', 'clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        const clusterId = features[0].properties.cluster_id;
-        map.getSource('bus-stops').getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err) return;
-            map.easeTo({
-                center: features[0].geometry.coordinates,
-                zoom: zoom
-            });
-        });
-    });
-
-    // POPUP FOR INDIVIDUAL POINTS
+// 5. INTERACTIVITY: SHOW ALL ROUTES AT THIS LOCATION
     map.on('click', 'unclustered-point', (e) => {
         const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
-        const route = e.features[0].properties.Route;
+        const stopNum = e.features[0].properties.StopNumber;
+
+        // Find all features at the clicked point (to get all overlapping routes)
+        const features = map.queryRenderedFeatures(e.point, {
+            layers: ['unclustered-point']
+        });
+
+        // Extract and unique-ify the routes found at this spot
+        const routes = [...new Set(features.map(f => f.properties.Route))];
+        const routeListHTML = routes.map(r => `<li>Route ${r}</li>`).join('');
+
         new maplibregl.Popup()
             .setLngLat(coordinates)
-            .setHTML(`<strong>Route:</strong> ${route}`)
+            .setHTML(`
+                <div style="text-align: left; min-width: 150px;">
+                    <strong style="font-size: 1.1em;">Stop #${stopNum}</strong><br>
+                    <hr style="margin: 8px 0;">
+                    <p style="margin: 0 0 5px 0;"><strong>Routes serving this stop:</strong></p>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        ${routeListHTML}
+                    </ul>
+                </div>
+            `)
             .addTo(map);
     });
-
-    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
-});
 </script>
 
 </body>
 </html>
+
 
