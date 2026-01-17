@@ -26,104 +26,107 @@
 <script>
 const map = new maplibregl.Map({
     container: 'map',
-    // We use a light base style so labels stay visible if needed
     style: 'https://demotiles.maplibre.org/style.json', 
-    center: [-79.644, 43.595], // Centered on the Mississauga/GTA area
-    zoom: 11
+    center: [-79.644, 43.595], 
+    zoom: 10
 });
 
 map.on('load', () => {
-    // 1. ADD ESRI SATELLITE SOURCE
+    // 1. ADD ESRI SATELLITE
     map.addSource('esri-imagery', {
         'type': 'raster',
-        'tiles': [
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-        ],
-        'tileSize': 256,
-        'attribution': 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        'tileSize': 256
     });
+    map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' });
 
-    // 2. ADD THE BUS STOPS DATA SOURCE
+    // 2. ADD DATA SOURCE WITH CLUSTERING ENABLED
     map.addSource('bus-stops', {
         type: 'geojson',
-        data: './data/stops.geojson' 
+        data: './data/stops.geojson',
+        cluster: true,
+        clusterMaxZoom: 14, // Max zoom to cluster points on
+        clusterRadius: 50   // Radius of each cluster when clustering points
     });
 
-    // 3. ADD SATELLITE LAYER (Placed at the bottom)
+    // 3. LAYER: THE CLUSTERS (The large blue circles)
     map.addLayer({
-        'id': 'satellite-layer',
-        'type': 'raster',
-        'source': 'esri-imagery',
-        'paint': {}
-    });
-
-    // 4. ADD BUS STOPS LAYER WITH DYNAMIC PROPORTIONAL SYMBOLS
-    map.addLayer({
-        'id': 'stops-layer',
-        'type': 'circle',
-        'source': 'bus-stops',
-        'paint': {
-            // PROPORTIONAL RADIUS: Dots grow as you zoom in
+        id: 'clusters',
+        type: 'circle',
+        source: 'bus-stops',
+        filter: ['has', 'point_count'],
+        paint: {
+            'circle-color': '#0062d2', // Blue like your image
             'circle-radius': [
-                'interpolate',
-                ['exponential', 1.5],
-                ['zoom'],
-                10, 2,    // Tiny dots when viewing the whole city
-                13, 5,    // Medium dots for neighborhoods
-                16, 12,   // Large dots for specific street corners
-                20, 25    // Very large for high-detail building view
+                'step',
+                ['get', 'point_count'],
+                20, 100,  // 20px radius for < 100 points
+                30, 750,  // 30px radius for points between 100 and 750
+                40        // 40px radius for > 750 points
             ],
-            // DYNAMIC COLOR: Yellow for contrast against dark satellite tiles
-            'circle-color': '#f1c40f',
-            // DYNAMIC STROKE: Outline gets thicker as you zoom in
-            'circle-stroke-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                12, 1,
-                16, 3
-            ],
-            'circle-stroke-color': '#000000',
-            // OPACITY: Slightly transparent when zoomed out to reduce visual noise
-            'circle-opacity': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                9, 0.5,
-                13, 1
-            ]
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
         }
     });
 
-    // 5. INTERACTIVITY: POPUP ON CLICK
-    map.on('click', 'stops-layer', (e) => {
-        // Filter out Z-values if present in GeoJSON coordinates
-        const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
-        const props = e.features[0].properties;
+    // 4. LAYER: CLUSTER COUNTS (The numbers)
+    map.addLayer({
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'bus-stops',
+        filter: ['has', 'point_count'],
+        layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-font': ['Open Sans Bold'],
+            'text-size': 14
+        },
+        paint: {
+            'text-color': '#ffffff'
+        }
+    });
 
+    // 5. LAYER: INDIVIDUAL POINTS (When unclustered)
+    map.addLayer({
+        id: 'unclustered-point',
+        type: 'circle',
+        source: 'bus-stops',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+            'circle-color': '#f1c40f',
+            'circle-radius': 6,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff'
+        }
+    });
+
+    // CLICK TO ZOOM INTO A CLUSTER
+    map.on('click', 'clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('bus-stops').getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({
+                center: features[0].geometry.coordinates,
+                zoom: zoom
+            });
+        });
+    });
+
+    // POPUP FOR INDIVIDUAL POINTS
+    map.on('click', 'unclustered-point', (e) => {
+        const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
+        const route = e.features[0].properties.Route;
         new maplibregl.Popup()
             .setLngLat(coordinates)
-            .setHTML(`
-                <div style="text-align: left;">
-                    <strong style="font-size: 1.2em;">Route ${props.Route}</strong><br>
-                    <hr style="margin: 8px 0;">
-                    <strong>Stop Number:</strong> ${props.StopNumber}<br>
-                    <strong>Effective:</strong> ${props.Effective_ || 'N/A'}<br>
-                    <small>Coords: ${coordinates[1].toFixed(4)}, ${coordinates[0].toFixed(4)}</small>
-                </div>
-            `)
+            .setHTML(`<strong>Route:</strong> ${route}`)
             .addTo(map);
     });
 
-    // 6. UI: CURSOR CHANGE ON HOVER
-    map.on('mouseenter', 'stops-layer', () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', 'stops-layer', () => {
-        map.getCanvas().style.cursor = '';
-    });
+    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
 });
 </script>
 
 </body>
 </html>
+
