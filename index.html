@@ -19,32 +19,37 @@
 const map = new maplibregl.Map({
     container: 'map',
     style: 'https://demotiles.maplibre.org/style.json', 
-    center: [-79.64, 43.59], // Centered on Mississauga/GTA
+    center: [-79.64, 43.59], 
     zoom: 11
 });
 
 map.on('load', () => {
+    // 1. Add Source
     map.addSource('bus-stops', {
         type: 'geojson',
         data: './data/stops.geojson' 
     });
 
+    // 2. Add Layer
     map.addLayer({
         'id': 'stops-layer',
         'type': 'circle',
         'source': 'bus-stops',
         'paint': {
-    'circle-radius': [
-        'interpolate', 
-        ['linear'], 
-        ['zoom'],
-        10, 2,  // At zoom 10, radius is 2px
-        15, 10  // At zoom 15, radius is 10px
-    ],
-    'circle-color': '#8e44ad'
-}
+            'circle-radius': [
+                'interpolate', 
+                ['linear'], 
+                ['zoom'],
+                10, 2,  
+                15, 10  
+            ],
+            'circle-color': '#8e44ad',
+            'circle-stroke-width': 1,
+            'circle-stroke-color': 'white'
+        }
+    }); // <--- THIS WAS MISSING IN YOUR CODE
 
-    // POPUP LOGIC: Click a stop to see the Route Number
+    // 3. POPUP LOGIC
     map.on('click', 'stops-layer', (e) => {
         const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
         const route = e.features[0].properties.Route;
@@ -56,7 +61,7 @@ map.on('load', () => {
             .addTo(map);
     });
 
-    // Change cursor to pointer on hover
+    // 4. Cursor Effects
     map.on('mouseenter', 'stops-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'stops-layer', () => { map.getCanvas().style.cursor = ''; });
 });
@@ -64,6 +69,3 @@ map.on('load', () => {
 
 </body>
 </html>
-
-
-
