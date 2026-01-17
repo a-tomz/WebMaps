@@ -1,2 +1,2 @@
 # WebMaps
- Location for hostring web maps
+ Location for hosting web maps
