@@ -34,19 +34,15 @@ map.on('load', () => {
         'type': 'circle',
         'source': 'bus-stops',
         'paint': {
-    'circle-radius': 6,
-    'circle-color': [
-        'match',
-        ['get', 'Route'],  // The property name from your JSON
-        13, '#3498db',     // Route 13 gets Blue
-        35, '#e74c3c',     // Route 35 gets Red
-        74, '#2ecc71',     // Route 74 gets Green
-        /* fallback */ '#95a5a6' // Everything else gets Gray
+    'circle-radius': [
+        'interpolate', 
+        ['linear'], 
+        ['zoom'],
+        10, 2,  // At zoom 10, radius is 2px
+        15, 10  // At zoom 15, radius is 10px
     ],
-    'circle-stroke-width': 1,
-    'circle-stroke-color': 'white'
+    'circle-color': '#8e44ad'
 }
-    });
 
     // POPUP LOGIC: Click a stop to see the Route Number
     map.on('click', 'stops-layer', (e) => {
@@ -68,5 +64,6 @@ map.on('load', () => {
 
 </body>
 </html>
+
 
 
