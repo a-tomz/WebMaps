@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Web Map</title>
+    <title>GTA Bus Stops - Satellite View</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
@@ -18,19 +18,38 @@
 <script>
 const map = new maplibregl.Map({
     container: 'map',
+    // We start with a basic style, then we will add the imagery on top of it
     style: 'https://demotiles.maplibre.org/style.json', 
     center: [-79.64, 43.59], 
     zoom: 11
 });
 
 map.on('load', () => {
-    // 1. Add Source
+    // 1. ADD ESRI SATELLITE SOURCE
+    map.addSource('esri-imagery', {
+        'type': 'raster',
+        'tiles': [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        ],
+        'tileSize': 256,
+        'attribution': 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+
+    // 2. ADD THE BUS STOPS DATA SOURCE
     map.addSource('bus-stops', {
         type: 'geojson',
         data: './data/stops.geojson' 
     });
 
-    // 2. Add Layer
+    // 3. ADD SATELLITE LAYER FIRST (So it's on the bottom)
+    map.addLayer({
+        'id': 'satellite-layer',
+        'type': 'raster',
+        'source': 'esri-imagery',
+        'paint': {}
+    });
+
+    // 4. ADD BUS STOPS LAYER (On top of satellite)
     map.addLayer({
         'id': 'stops-layer',
         'type': 'circle',
@@ -40,16 +59,16 @@ map.on('load', () => {
                 'interpolate', 
                 ['linear'], 
                 ['zoom'],
-                10, 2,  
-                15, 10  
+                10, 3,  
+                15, 12  
             ],
-            'circle-color': '#8e44ad',
-            'circle-stroke-width': 1,
-            'circle-stroke-color': 'white'
+            'circle-color': '#f1c40f', // Bright yellow looks great on satellite
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#000000'
         }
-    }); // <--- THIS WAS MISSING IN YOUR CODE
+    });
 
-    // 3. POPUP LOGIC
+    // 5. POPUP LOGIC
     map.on('click', 'stops-layer', (e) => {
         const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
         const route = e.features[0].properties.Route;
@@ -61,7 +80,7 @@ map.on('load', () => {
             .addTo(map);
     });
 
-    // 4. Cursor Effects
+    // 6. CURSOR EFFECTS
     map.on('mouseenter', 'stops-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'stops-layer', () => { map.getCanvas().style.cursor = ''; });
 });
