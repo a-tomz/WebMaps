@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mississauga Transit & Infrastructure</title>
+    <title>Mississauga Transit & Infrastructure Analysis</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
@@ -52,9 +54,24 @@
         .legend-key { width: 25px; height: 3px; margin-right: 10px; border-radius: 2px; flex-shrink: 0; }
         .circle-key { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
 
+        /* Analysis Button Styling */
+        .analysis-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #0062d2;
+            border-radius: 4px;
+            background: #f0f7ff;
+            color: #0062d2;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .analysis-btn:hover { background: #0062d2; color: white; }
+        .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; margin-top: 5px; }
+        .clear-btn:hover { background: #d32f2f; color: white; }
+
         .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-        td, th { padding: 4px; border-bottom: 1px solid #eee; text-align: left; }
     </style>
 </head>
 <body>
@@ -72,15 +89,16 @@
         </div>
 
         <div class="legend-section">
+            <div class="legend-section-title">Analysis Tools</div>
+            <button id="btn-analyze-coverage" class="analysis-btn">CALCULATE 400M COVERAGE</button>
+            <button id="btn-clear-analysis" class="analysis-btn clear-btn">DELETE RESULTS</button>
+        </div>
+
+        <div class="legend-section">
             <div class="legend-section-title">Road Hierarchy</div>
-            <div class="legend-item"><input type="checkbox" id="check-roads" checked>
-                <span class="legend-key" style="background: #d32f2f; margin-left:8px;"></span>Arterial Roads</div>
-            <div class="legend-item"><span style="width:13px; display:inline-block;"></span>
-                <span class="legend-key" style="background: #1976d2; margin-left:8px;"></span>Major Collectors</div>
-            <div class="legend-item"><span style="width:13px; display:inline-block;"></span>
-                <span class="legend-key" style="background: #388e3c; margin-left:8px;"></span>Minor Collectors</div>
-            <div class="legend-item"><span style="width:13px; display:inline-block;"></span>
-                <span class="legend-key" style="background: #fb8c00; margin-left:8px;"></span>Future / Conceptual</div>
+            <div class="legend-item"><input type="checkbox" id="check-roads" checked><span class="legend-key" style="background: #d32f2f; margin-left:8px;"></span>Arterial</div>
+            <div class="legend-item"><span style="width:13px; display:inline-block;"></span><span class="legend-key" style="background: #1976d2; margin-left:8px;"></span>Major Collector</div>
+            <div class="legend-item"><span style="width:13px; display:inline-block;"></span><span class="legend-key" style="background: #388e3c; margin-left:8px;"></span>Minor Collector</div>
         </div>
 
         <div class="legend-section">
@@ -120,33 +138,16 @@
 
         // --- LAYERS ---
         map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery', 'layout': { 'visibility': 'none' } });
-        
         map.addLayer({ 'id': 'boundary-layer', 'type': 'line', 'source': 'municipal-boundary', 'paint': { 'line-color': '#673ab7', 'line-width': 3, 'line-dasharray': [2, 1] } });
-        
         map.addLayer({ 'id': 'streets-layer', 'type': 'line', 'source': 'street-centreline', 'layout': { 'visibility': 'none' }, 'paint': { 'line-color': '#9e9e9e', 'line-width': 1, 'line-opacity': 0.5 } });
 
-        // Styled Road Network based on "Layer" field
         map.addLayer({
             'id': 'roads-layer',
             'type': 'line',
             'source': 'road-network',
             'paint': {
-                'line-color': [
-                    'match',
-                    ['get', 'Layer'],
-                    ['Arterial', 'RegionalArterial'], '#d32f2f',
-                    ['MajorCollector', 'MajorCollectorScenicRoute', 'RegionalMajorCollectorScenicRoute'], '#1976d2',
-                    ['MinorCollector', 'MinorCollectorScenicRoute', 'FutureMinorCollector'], '#388e3c',
-                    ['FutureArterialConceptual', 'FutureMajorCollectorConceptual', 'FutureRoadLinkToBeAdded'], '#fb8c00',
-                    '#777' // Default color if not matched
-                ],
-                'line-width': [
-                    'match',
-                    ['get', 'Layer'],
-                    ['Arterial', 'RegionalArterial'], 3,
-                    ['MajorCollector', 'MajorCollectorScenicRoute', 'RegionalMajorCollectorScenicRoute'], 2,
-                    1 // Default width
-                ],
+                'line-color': ['match', ['get', 'Layer'], ['Arterial', 'RegionalArterial'], '#d32f2f', ['MajorCollector', 'MajorCollectorScenicRoute', 'RegionalMajorCollectorScenicRoute'], '#1976d2', ['MinorCollector', 'MinorCollectorScenicRoute', 'FutureMinorCollector'], '#388e3c', '#fb8c00'],
+                'line-width': ['match', ['get', 'Layer'], ['Arterial', 'RegionalArterial'], 3, ['MajorCollector', 'MajorCollectorScenicRoute'], 2, 1],
                 'line-opacity': 0.8
             }
         });
@@ -155,12 +156,43 @@
         map.addLayer({ id: 'cluster-count', type: 'symbol', source: 'bus-stops', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 }, paint: { 'text-color': '#ffffff' } });
         map.addLayer({ id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': '#f1c40f', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#000000' } });
 
-        // --- 4-WAY BASEMAP TOGGLE ---
+        // --- ANALYSIS TOOLS LOGIC ---
+        document.getElementById('btn-analyze-coverage').addEventListener('click', async () => {
+            // Get original geojson from source
+            const response = await fetch('./data/stops.geojson');
+            const data = await response.json();
+            
+            // Turf analysis: Create 400m buffers around stops
+            const buffered = turf.buffer(data, 0.4, {units: 'kilometers'});
+            
+            // Add or update the result layer
+            if (map.getSource('buffer-result')) {
+                map.getSource('buffer-result').setData(buffered);
+                map.setLayoutProperty('buffer-layer', 'visibility', 'visible');
+            } else {
+                map.addSource('buffer-result', { type: 'geojson', data: buffered });
+                map.addLayer({
+                    'id': 'buffer-layer',
+                    'type': 'fill',
+                    'source': 'buffer-result',
+                    'paint': {
+                        'fill-color': '#0062d2',
+                        'fill-opacity': 0.25,
+                        'fill-outline-color': '#003366'
+                    }
+                }, 'boundary-layer'); // Layering result under the boundary
+            }
+        });
+
+        document.getElementById('btn-clear-analysis').addEventListener('click', () => {
+            if (map.getLayer('buffer-layer')) map.setLayoutProperty('buffer-layer', 'visibility', 'none');
+        });
+
+        // --- BASEMAP & UI TOGGLES ---
         const mapContainer = document.getElementById('map');
         document.getElementById('basemap-toggle').addEventListener('click', (e) => {
             currentBasemapIndex = (currentBasemapIndex + 1) % basemaps.length;
             const state = basemaps[currentBasemapIndex];
-
             map.setLayoutProperty('osm-layer', 'visibility', 'none');
             map.setLayoutProperty('satellite-layer', 'visibility', 'none');
 
@@ -181,7 +213,6 @@
             }
         });
 
-        // --- DATA TOGGLES ---
         const setupToggle = (id, layerIds) => {
             document.getElementById(id).addEventListener('change', (e) => {
                 const vis = e.target.checked ? 'visible' : 'none';
@@ -194,22 +225,17 @@
         setupToggle('check-streets', ['streets-layer']);
         setupToggle('check-boundary', ['boundary-layer']);
 
-        // --- POPUPS & INTERACTION ---
+        // --- INTERACTION ---
         map.on('click', 'unclustered-point', (e) => {
             const props = e.features[0].properties;
-            const features = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
-            let rows = features.map(f => `<tr><td>${f.properties.Route}</td><td>${f.properties.Effective_}</td></tr>`).join('');
-            new maplibregl.Popup().setLngLat(e.features[0].geometry.coordinates).setHTML(`<strong>Stop #${props.StopNumber}</strong><table><tr><th>Route</th><th>Date</th></tr>${rows}</table>`).addTo(map);
+            new maplibregl.Popup().setLngLat(e.features[0].geometry.coordinates).setHTML(`<strong>Stop #${props.StopNumber}</strong><br>Route: ${props.Route}`).addTo(map);
         });
-
         map.on('click', 'clusters', (e) => {
             map.getSource('bus-stops').getClusterExpansionZoom(e.features[0].properties.cluster_id, (err, zoom) => {
                 if (!err) map.easeTo({ center: e.features[0].geometry.coordinates, zoom: zoom });
             });
         });
-
-        const hoverLayers = ['clusters', 'unclustered-point'];
-        hoverLayers.forEach(l => {
+        ['clusters', 'unclustered-point'].forEach(l => {
             map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
             map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
         });
