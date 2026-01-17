@@ -89,4 +89,47 @@
             source: 'bus-stops',
             filter: ['!', ['has', 'point_count']],
             paint: {
-                'circle
+                'circle-color': '#f1c40f',
+                'circle-radius': 7,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#000000'
+            }
+        });
+
+        // POPUP LOGIC
+        map.on('click', 'unclustered-point', (e) => {
+            const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
+            const stopNum = e.features[0].properties.StopNumber;
+            const features = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
+
+            let tableRows = '';
+            features.forEach((f) => {
+                const route = f.properties.Route || 'N/A';
+                const effective = f.properties.Effective_ || 'N/A';
+                tableRows += `<tr><td>${route}</td><td>${effective}</td></tr>`;
+            });
+
+            new maplibregl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(`<strong>Stop #${stopNum}</strong><table><thead><tr><th>Route</th><th>Date</th></tr></thead><tbody>${tableRows}</tbody></table>`)
+                .addTo(map);
+        });
+
+        // ZOOM ON CLUSTER CLICK
+        map.on('click', 'clusters', (e) => {
+            const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+            const clusterId = features[0].properties.cluster_id;
+            map.getSource('bus-stops').getClusterExpansionZoom(clusterId, (err, zoom) => {
+                if (!err) map.easeTo({ center: features[0].geometry.coordinates, zoom: zoom });
+            });
+        });
+
+        // CURSOR CHANGE
+        map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+        map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+    });
+</script>
+</body>
+</html>
