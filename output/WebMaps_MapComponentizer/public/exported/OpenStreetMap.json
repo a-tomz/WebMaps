@@ -1,0 +1,1 @@
+{"urlParameters": {"crs": "EPSG:3857", "tilePixelRatio": "1", "type": "xyz", "zmax": "19", "zmin": "0", "transparent": "TRUE"}, "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "name": "OpenStreetMap", "attr": "", "title": "", "type": "wms"}
