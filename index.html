@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit - OSM & Satellite Toggle</title>
+    <title>GTA Transit - Map Controls</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
+        /* Basemap Toggle */
         .map-overlay {
             position: absolute;
             top: 15px;
@@ -22,16 +23,33 @@
             border: 2px solid #0062d2;
             border-radius: 6px;
             cursor: pointer;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: sans-serif;
             font-weight: bold;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
-        .toggle-btn:hover { background: #f0f7ff; }
 
+        /* Legend & Layer Control */
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 15px;
+            z-index: 10;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            min-width: 180px;
+        }
+        .legend h4 { margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
+        .legend-key { width: 15px; height: 15px; border-radius: 50%; margin-right: 10px; border: 1px solid #333; }
+        
+        /* Popup Styling */
         .maplibregl-popup-content { font-family: Arial, sans-serif; padding: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th { border-bottom: 2px solid #eee; text-align: left; padding: 4px; font-size: 12px; }
-        td { border-bottom: 1px solid #f9f9f9; padding: 4px; font-size: 12px; }
+        th { border-bottom: 2px solid #eee; text-align: left; padding: 4px; font-size: 11px; }
+        td { border-bottom: 1px solid #f9f9f9; padding: 4px; font-size: 11px; }
     </style>
 </head>
 <body>
@@ -40,12 +58,25 @@
     <button id="basemap-toggle" class="toggle-btn">SATELLITE VIEW</button>
 </div>
 
+<div class="legend">
+    <h4>Map Legend</h4>
+    <div class="legend-item">
+        <input type="checkbox" id="check-clusters" checked style="margin-right: 8px;">
+        <span class="legend-key" style="background: #0062d2;"></span>
+        Bus Stop Clusters
+    </div>
+    <div class="legend-item">
+        <input type="checkbox" id="check-stops" checked style="margin-right: 8px;">
+        <span class="legend-key" style="background: #f1c40f;"></span>
+        Individual Stops
+    </div>
+</div>
+
 <div id="map"></div>
 
 <script>
     const map = new maplibregl.Map({
         container: 'map',
-        // Defining a blank style allows us to add OSM as a source manually
         style: {
             "version": 8,
             "sources": {
@@ -53,32 +84,23 @@
                     "type": "raster",
                     "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
                     "tileSize": 256,
-                    "attribution": "&copy; OpenStreetMap contributors"
+                    "attribution": "&copy; OpenStreetMap"
                 }
             },
-            "layers": [
-                {
-                    "id": "osm-layer",
-                    "type": "raster",
-                    "source": "osm-tiles",
-                    "paint": { "raster-opacity": 1 }
-                }
-            ]
+            "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm-tiles" }]
         },
         center: [-79.644, 43.595],
         zoom: 10
     });
 
     map.on('load', () => {
-        // 1. ADD SATELLITE SOURCE
+        // 1. SOURCES
         map.addSource('esri-imagery', {
             'type': 'raster',
             'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-            'tileSize': 256,
-            'attribution': 'Tiles &copy; Esri'
+            'tileSize': 256
         });
         
-        // 2. DATA SOURCE
         map.addSource('bus-stops', {
             type: 'geojson',
             data: './data/stops.geojson', 
@@ -87,7 +109,7 @@
             clusterRadius: 40 
         });
 
-        // 3. SATELLITE LAYER (Hidden by default)
+        // 2. LAYERS
         map.addLayer({
             'id': 'satellite-layer',
             'type': 'raster',
@@ -95,7 +117,6 @@
             'layout': { 'visibility': 'none' }
         });
 
-        // 4. TRANSIT LAYERS
         map.addLayer({
             id: 'clusters',
             type: 'circle',
@@ -104,8 +125,7 @@
             paint: {
                 'circle-color': '#0062d2',
                 'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40],
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff'
+                'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff'
             }
         });
 
@@ -114,10 +134,7 @@
             type: 'symbol',
             source: 'bus-stops',
             filter: ['has', 'point_count'],
-            layout: {
-                'text-field': '{point_count_abbreviated}',
-                'text-size': 14
-            },
+            layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 },
             paint: { 'text-color': '#ffffff' }
         });
 
@@ -129,65 +146,61 @@
             paint: {
                 'circle-color': '#f1c40f',
                 'circle-radius': 7,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#000000'
+                'circle-stroke-width': 2, 'circle-stroke-color': '#000000'
             }
         });
 
-        // 5. TOGGLE FUNCTION
+        // 3. BASEMAP TOGGLE LOGIC
         const toggleBtn = document.getElementById('basemap-toggle');
         toggleBtn.addEventListener('click', () => {
             const isSatVisible = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
-            
             if (isSatVisible) {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'none');
                 map.setLayoutProperty('osm-layer', 'visibility', 'visible');
                 toggleBtn.innerText = 'SATELLITE VIEW';
-                toggleBtn.style.background = "white";
-                toggleBtn.style.color = "black";
             } else {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
                 map.setLayoutProperty('osm-layer', 'visibility', 'none');
                 toggleBtn.innerText = 'STREET VIEW (OSM)';
-                toggleBtn.style.background = "#0062d2";
-                toggleBtn.style.color = "white";
-                
-                // Ensure data stays on top
                 map.moveLayer('satellite-layer', 'clusters');
             }
         });
 
-        // 6. POPUPS & INTERACTION
+        // 4. DATA LAYER TOGGLE LOGIC
+        document.getElementById('check-clusters').addEventListener('change', (e) => {
+            const visibility = e.target.checked ? 'visible' : 'none';
+            map.setLayoutProperty('clusters', 'visibility', visibility);
+            map.setLayoutProperty('cluster-count', 'visibility', visibility);
+        });
+
+        document.getElementById('check-stops').addEventListener('change', (e) => {
+            const visibility = e.target.checked ? 'visible' : 'none';
+            map.setLayoutProperty('unclustered-point', 'visibility', visibility);
+        });
+
+        // 5. INTERACTION
         map.on('click', 'unclustered-point', (e) => {
             const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
             const stopNum = e.features[0].properties.StopNumber;
             const features = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
-
             let tableRows = '';
             features.forEach((f) => {
-                const route = f.properties.Route || 'N/A';
-                const effective = f.properties.Effective_ || 'N/A';
-                tableRows += `<tr><td>${route}</td><td>${effective}</td></tr>`;
+                tableRows += `<tr><td>${f.properties.Route}</td><td>${f.properties.Effective_}</td></tr>`;
             });
-
-            new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(`<strong>Stop #${stopNum}</strong><table><thead><tr><th>Route</th><th>Date</th></tr></thead><tbody>${tableRows}</tbody></table>`)
-                .addTo(map);
+            new maplibregl.Popup().setLngLat(coordinates).setHTML(`<strong>Stop #${stopNum}</strong><table><thead><tr><th>Route</th><th>Date</th></tr></thead><tbody>${tableRows}</tbody></table>`).addTo(map);
         });
 
         map.on('click', 'clusters', (e) => {
             const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-            const clusterId = features[0].properties.cluster_id;
-            map.getSource('bus-stops').getClusterExpansionZoom(clusterId, (err, zoom) => {
+            map.getSource('bus-stops').getClusterExpansionZoom(features[0].properties.cluster_id, (err, zoom) => {
                 if (!err) map.easeTo({ center: features[0].geometry.coordinates, zoom: zoom });
             });
         });
 
-        map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
-        map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+        map.on('mouseenter', 'clusters', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', 'clusters', () => map.getCanvas().style.cursor = '');
+        map.on('mouseenter', 'unclustered-point', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', 'unclustered-point', () => map.getCanvas().style.cursor = '');
     });
 </script>
 </body>
