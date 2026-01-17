@@ -3,13 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit - Cluster Map</title>
+    <title>GTA Transit - Toggle Map</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
+        /* Toggle Button Styling */
+        .map-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1;
+        }
+        .toggle-btn {
+            background: white;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .toggle-btn:hover { background: #f9f9f9; }
+
         .maplibregl-popup-content {
             font-family: Arial, sans-serif;
             padding: 12px;
@@ -22,19 +42,22 @@
 </head>
 <body>
 
+<div class="map-overlay">
+    <button id="basemap-toggle" class="toggle-btn">Switch to Satellite</button>
+</div>
+
 <div id="map"></div>
 
 <script>
     const map = new maplibregl.Map({
         container: 'map',
-        // Using a hosted style ensures Glyphs (fonts) and Sprites are available
         style: 'https://demotiles.maplibre.org/style.json', 
         center: [-79.644, 43.595],
         zoom: 10
     });
 
     map.on('load', () => {
-        // 1. ADD ESRI SATELLITE
+        // 1. ADD SATELLITE SOURCE
         map.addSource('esri-imagery', {
             'type': 'raster',
             'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
@@ -42,10 +65,16 @@
             'attribution': 'Tiles &copy; Esri'
         });
         
-        // Add satellite layer at the very bottom (index 0)
-        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' }, map.getStyle().layers[0].id);
+        // 2. ADD SATELLITE LAYER 
+        // We set visibility to 'none' by default so it starts in "Street" mode
+        map.addLayer({
+            'id': 'satellite-layer',
+            'type': 'raster',
+            'source': 'esri-imagery',
+            'layout': { 'visibility': 'none' }
+        }, map.getStyle().layers[0].id); // Keep it behind labels and data
 
-        // 2. ADD GEOJSON DATA
+        // 3. ADD BUS DATA
         map.addSource('bus-stops', {
             type: 'geojson',
             data: './data/stops.geojson', 
@@ -54,7 +83,7 @@
             clusterRadius: 40 
         });
 
-        // 3. CLUSTER CIRCLES
+        // 4. CLUSTER SYMBOLOGY
         map.addLayer({
             id: 'clusters',
             type: 'circle',
@@ -68,7 +97,6 @@
             }
         });
 
-        // 4. CLUSTER LABELS
         map.addLayer({
             id: 'cluster-count',
             type: 'symbol',
@@ -82,7 +110,6 @@
             paint: { 'text-color': '#ffffff' }
         });
 
-        // 5. INDIVIDUAL POINTS
         map.addLayer({
             id: 'unclustered-point',
             type: 'circle',
@@ -96,7 +123,21 @@
             }
         });
 
-        // POPUP LOGIC
+        // 5. TOGGLE LOGIC
+        const toggleBtn = document.getElementById('basemap-toggle');
+        toggleBtn.addEventListener('click', () => {
+            const isSatellite = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
+            
+            if (isSatellite) {
+                map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+                toggleBtn.innerText = 'Switch to Satellite';
+            } else {
+                map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+                toggleBtn.innerText = 'Switch to Street';
+            }
+        });
+
+        // 6. POPUP & INTERACTION (Your original working code)
         map.on('click', 'unclustered-point', (e) => {
             const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
             const stopNum = e.features[0].properties.StopNumber;
@@ -115,7 +156,6 @@
                 .addTo(map);
         });
 
-        // ZOOM ON CLUSTER CLICK
         map.on('click', 'clusters', (e) => {
             const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
             const clusterId = features[0].properties.cluster_id;
@@ -124,7 +164,6 @@
             });
         });
 
-        // CURSOR CHANGE
         map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
         map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
         map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
