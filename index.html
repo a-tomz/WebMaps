@@ -3,125 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Bus Stops - Cluster Map</title>
+    <title>Debug Map</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-        .maplibregl-popup-content {
-            font-family: sans-serif;
-            padding: 15px;
-            line-height: 1.4;
-        }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ccc; }
     </style>
 </head>
 <body>
-
 <div id="map"></div>
-
 <script>
-const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://demotiles.maplibre.org/style.json', 
-    center: [-79.644, 43.595], 
-    zoom: 10
-});
-
-map.on('load', () => {
-    // 1. ADD ESRI SATELLITE BASEMAP
-    map.addSource('esri-imagery', {
-        'type': 'raster',
-        'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        'tileSize': 256,
-        'attribution': 'Tiles &copy; Esri'
-    });
-    map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' });
-
-    // 2. ADD GEOJSON SOURCE WITH CLUSTERING
-    map.addSource('bus-stops', {
-        type: 'geojson',
-        data: './data/stops.geojson',
-        cluster: true,
-        clusterMaxZoom: 14, // Points stop clustering after this zoom
-        clusterRadius: 40   // Distance in pixels to group points together
-    });
-
-    // 3. LAYER: CLUSTER CIRCLES (The Blue Density Hubs)
-    map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: 'bus-stops',
-        filter: ['has', 'point_count'],
-        paint: {
-            'circle-color': '#0062d2', 
-            'circle-radius': [
-                'step',
-                ['get', 'point_count'],
-                20, 100,  
-                30, 750,  
-                40        
-            ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-        }
-    });
-
-    // 4. LAYER: CLUSTER TEXT (The Counts)
-    map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: 'bus-stops',
-        filter: ['has', 'point_count'],
-        layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-font': ['Open Sans Bold'],
-            'text-size': 14
+    // Use a very basic style to ensure it loads even if external styles fail
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            "version": 8,
+            "sources": {},
+            "layers": []
         },
-        paint: { 'text-color': '#ffffff' }
+        center: [-79.644, 43.595],
+        zoom: 10
     });
 
-    // 5. LAYER: INDIVIDUAL STOPS (Unclustered)
-    map.addLayer({
-        id: 'unclustered-point',
-        type: 'circle',
-        source: 'bus-stops',
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-            'circle-color': '#f1c40f',
-            'circle-radius': 7,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#000000'
-        }
-    });
+    map.on('load', () => {
+        console.log("Map loaded successfully");
 
-    // CLICK TO ZOOM INTO CLUSTERS
-    map.on('click', 'clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        const clusterId = features[0].properties.cluster_id;
-        map.getSource('bus-stops').getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err) return;
-            map.easeTo({
-                center: features[0].geometry.coordinates,
-                zoom: zoom
-            });
+        // 1. Add Satellite
+        map.addSource('esri-imagery', {
+            'type': 'raster',
+            'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            'tileSize': 256
+        });
+        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery' });
+
+        // 2. Add Data
+        map.addSource('bus-stops', {
+            type: 'geojson',
+            data: './data/stops.geojson', // DOUBLE CHECK THIS PATH
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 40
+        });
+
+        // 3. Cluster Circles
+        map.addLayer({
+            id: 'clusters',
+            type: 'circle',
+            source: 'bus-stops',
+            filter: ['has', 'point_count'],
+            paint: {
+                'circle-color': '#0062d2',
+                'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        // 4. Cluster Labels (Using system fonts to avoid loading errors)
+        map.addLayer({
+            id: 'cluster-count',
+            type: 'symbol',
+            source: 'bus-stops',
+            filter: ['has', 'point_count'],
+            layout: {
+                'text-field': '{point_count_abbreviated}',
+                'text-size': 14
+            },
+            paint: { 'text-color': '#ffffff' }
+        });
+
+        // 5. Unclustered Points
+        map.addLayer({
+            id: 'unclustered-point',
+            type: 'circle',
+            source: 'bus-stops',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+                'circle-color': '#f1c40f',
+                'circle-radius': 7,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#000000'
+            }
         });
     });
 
-    // 6. MULTI-ROUTE POPUP LOGIC
-    map.on('click', 'unclustered-point', (e) => {
-        const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
-        const stopNum = e.features[0].properties.StopNumber;
-
-        // Query ALL features at the clicked pixel to find stacked routes
-        const features = map.queryRenderedFeatures(e.point, {
-            layers: ['unclustered-point']
-        });
-
-        // Pull the "Route" property from every overlapping feature and remove duplicates
-        const routes = [...new Set(features.map(f => f.properties.Route))];
-        const routeList = routes.map(r => `<li>Route ${r}</li>`).join('');
-
-        new maplibregl.Popup()
-            .setLngLat(coordinates)
-            .setHTML(
+    // Error handling
+    map.on('error', (e) => {
+        console.error("Mapbox/MapLibre error:", e.error);
+    });
+</script>
+</body>
+</html>
