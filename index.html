@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit</title>
+    <title>Mississauga Transit & Infrastructure Map</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
-        /* Basemap Toggle */
+        /* Basemap Switcher */
         .map-overlay {
             position: absolute;
             top: 15px;
@@ -39,12 +39,17 @@
             border-radius: 8px;
             font-family: sans-serif;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            min-width: 180px;
+            min-width: 220px;
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .legend h4 { margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
-        .legend-key { width: 15px; height: 15px; border-radius: 50%; margin-right: 10px; border: 1px solid #333; }
-        
+        .legend-section { margin-bottom: 15px; }
+        .legend-section-title { font-size: 11px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; cursor: pointer; }
+        .legend-key { width: 25px; height: 3px; margin-right: 10px; border-radius: 2px; }
+        .circle-key { width: 12px; height: 12px; border-radius: 50%; }
+
         /* Popup Styling */
         .maplibregl-popup-content { font-family: Arial, sans-serif; padding: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -59,16 +64,39 @@
 </div>
 
 <div class="legend">
-    <h4>Map Legend</h4>
-    <div class="legend-item">
-        <input type="checkbox" id="check-clusters" checked style="margin-right: 8px;">
-        <span class="legend-key" style="background: #0062d2;"></span>
-        Bus Stop Clusters
+    <h4>Map Layers</h4>
+    
+    <div class="legend-section">
+        <div class="legend-section-title">Transit Data</div>
+        <div class="legend-item">
+            <input type="checkbox" id="check-clusters" checked>
+            <span class="legend-key circle-key" style="background: #0062d2; margin-left:8px;"></span>
+            Stop Clusters
+        </div>
+        <div class="legend-item">
+            <input type="checkbox" id="check-stops" checked>
+            <span class="legend-key circle-key" style="background: #f1c40f; margin-left:8px;"></span>
+            Individual Stops
+        </div>
     </div>
-    <div class="legend-item">
-        <input type="checkbox" id="check-stops" checked style="margin-right: 8px;">
-        <span class="legend-key" style="background: #f1c40f;"></span>
-        Individual Stops
+
+    <div class="legend-section">
+        <div class="legend-section-title">Infrastructure</div>
+        <div class="legend-item">
+            <input type="checkbox" id="check-roads" checked>
+            <span class="legend-key" style="background: #ff5722; margin-left:8px;"></span>
+            Road Network
+        </div>
+        <div class="legend-item">
+            <input type="checkbox" id="check-streets">
+            <span class="legend-key" style="background: #9e9e9e; margin-left:8px;"></span>
+            Street Centrelines
+        </div>
+        <div class="legend-item">
+            <input type="checkbox" id="check-boundary" checked>
+            <span class="legend-key" style="background: transparent; border: 2px dashed #673ab7; height: 0; margin-left:8px;"></span>
+            City Boundary
+        </div>
     </div>
 </div>
 
@@ -90,104 +118,105 @@
             "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm-tiles" }]
         },
         center: [-79.644, 43.595],
-        zoom: 10
+        zoom: 11
     });
 
     map.on('load', () => {
-        // 1. SOURCES
+        // --- SOURCES ---
         map.addSource('esri-imagery', {
             'type': 'raster',
             'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
             'tileSize': 256
         });
-        
-        map.addSource('bus-stops', {
-            type: 'geojson',
-            data: './data/stops.geojson', 
-            cluster: true,
-            clusterMaxZoom: 14,
-            clusterRadius: 40 
+
+        map.addSource('bus-stops', { type: 'geojson', data: './data/stops.geojson', cluster: true, clusterMaxZoom: 14, clusterRadius: 40 });
+        map.addSource('municipal-boundary', { type: 'geojson', data: './data/Municipal_Boundary.geojson' });
+        map.addSource('road-network', { type: 'geojson', data: './data/MOP_LongTermRoadNetwork.geojson' });
+        map.addSource('street-centreline', { type: 'geojson', data: './data/StreetCentreline.geojson' });
+
+        // --- LAYERS ---
+
+        // 1. Satellite (Hidden)
+        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery', 'layout': { 'visibility': 'none' } });
+
+        // 2. Municipal Boundary (Dashed Line)
+        map.addLayer({
+            'id': 'boundary-layer',
+            'type': 'line',
+            'source': 'municipal-boundary',
+            'paint': { 'line-color': '#673ab7', 'line-width': 3, 'line-dasharray': [2, 1] }
         });
 
-        // 2. LAYERS
+        // 3. Street Centreline (Fine detail - off by default)
         map.addLayer({
-            'id': 'satellite-layer',
-            'type': 'raster',
-            'source': 'esri-imagery',
-            'layout': { 'visibility': 'none' }
+            'id': 'streets-layer',
+            'type': 'line',
+            'source': 'street-centreline',
+            'layout': { 'visibility': 'none' },
+            'paint': { 'line-color': '#9e9e9e', 'line-width': 1, 'line-opacity': 0.6 }
         });
 
+        // 4. Road Network (Colored by RoadClass)
         map.addLayer({
-            id: 'clusters',
-            type: 'circle',
-            source: 'bus-stops',
-            filter: ['has', 'point_count'],
-            paint: {
-                'circle-color': '#0062d2',
-                'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40],
-                'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff'
+            'id': 'roads-layer',
+            'type': 'line',
+            'source': 'road-network',
+            'paint': {
+                'line-color': '#ff5722',
+                'line-width': ['step', ['zoom'], 1, 12, 2, 15, 4],
+                'line-opacity': 0.8
             }
         });
 
+        // 5. Bus Stop Clusters
         map.addLayer({
-            id: 'cluster-count',
-            type: 'symbol',
-            source: 'bus-stops',
-            filter: ['has', 'point_count'],
+            id: 'clusters', type: 'circle', source: 'bus-stops', filter: ['has', 'point_count'],
+            paint: { 'circle-color': '#0062d2', 'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' }
+        });
+
+        map.addLayer({
+            id: 'cluster-count', type: 'symbol', source: 'bus-stops', filter: ['has', 'point_count'],
             layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 },
             paint: { 'text-color': '#ffffff' }
         });
 
+        // 6. Individual Stops
         map.addLayer({
-            id: 'unclustered-point',
-            type: 'circle',
-            source: 'bus-stops',
-            filter: ['!', ['has', 'point_count']],
-            paint: {
-                'circle-color': '#f1c40f',
-                'circle-radius': 7,
-                'circle-stroke-width': 2, 'circle-stroke-color': '#000000'
-            }
+            id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']],
+            paint: { 'circle-color': '#f1c40f', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#000000' }
         });
 
-        // 3. BASEMAP TOGGLE LOGIC
-        const toggleBtn = document.getElementById('basemap-toggle');
-        toggleBtn.addEventListener('click', () => {
-            const isSatVisible = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
-            if (isSatVisible) {
-                map.setLayoutProperty('satellite-layer', 'visibility', 'none');
-                map.setLayoutProperty('osm-layer', 'visibility', 'visible');
-                toggleBtn.innerText = 'SATELLITE VIEW';
-            } else {
-                map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-                map.setLayoutProperty('osm-layer', 'visibility', 'none');
-                toggleBtn.innerText = 'STREET VIEW (OSM)';
-                map.moveLayer('satellite-layer', 'clusters');
-            }
+        // --- CONTROLS ---
+
+        // Basemap Toggle
+        document.getElementById('basemap-toggle').addEventListener('click', (e) => {
+            const isSat = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
+            map.setLayoutProperty('satellite-layer', 'visibility', isSat ? 'none' : 'visible');
+            map.setLayoutProperty('osm-layer', 'visibility', isSat ? 'visible' : 'none');
+            e.target.innerText = isSat ? 'SATELLITE VIEW' : 'STREET VIEW (OSM)';
+            if (!isSat) map.moveLayer('satellite-layer', 'boundary-layer');
         });
 
-        // 4. DATA LAYER TOGGLE LOGIC
-        document.getElementById('check-clusters').addEventListener('change', (e) => {
-            const visibility = e.target.checked ? 'visible' : 'none';
-            map.setLayoutProperty('clusters', 'visibility', visibility);
-            map.setLayoutProperty('cluster-count', 'visibility', visibility);
-        });
+        // Layer Toggles
+        const setupToggle = (id, layerIds) => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                const visibility = e.target.checked ? 'visible' : 'none';
+                layerIds.forEach(lyr => map.setLayoutProperty(lyr, 'visibility', visibility));
+            });
+        };
 
-        document.getElementById('check-stops').addEventListener('change', (e) => {
-            const visibility = e.target.checked ? 'visible' : 'none';
-            map.setLayoutProperty('unclustered-point', 'visibility', visibility);
-        });
+        setupToggle('check-clusters', ['clusters', 'cluster-count']);
+        setupToggle('check-stops', ['unclustered-point']);
+        setupToggle('check-roads', ['roads-layer']);
+        setupToggle('check-streets', ['streets-layer']);
+        setupToggle('check-boundary', ['boundary-layer']);
 
-        // 5. INTERACTION
+        // --- POPUPS ---
         map.on('click', 'unclustered-point', (e) => {
             const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
-            const stopNum = e.features[0].properties.StopNumber;
             const features = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
-            let tableRows = '';
-            features.forEach((f) => {
-                tableRows += `<tr><td>${f.properties.Route}</td><td>${f.properties.Effective_}</td></tr>`;
-            });
-            new maplibregl.Popup().setLngLat(coordinates).setHTML(`<strong>Stop #${stopNum}</strong><table><thead><tr><th>Route</th><th>Date</th></tr></thead><tbody>${tableRows}</tbody></table>`).addTo(map);
+            let tableRows = features.map(f => `<tr><td>${f.properties.Route}</td><td>${f.properties.Effective_}</td></tr>`).join('');
+            new maplibregl.Popup().setLngLat(coordinates).setHTML(`<strong>Stop #${e.features[0].properties.StopNumber}</strong><table><thead><tr><th>Route</th><th>Date</th></tr></thead><tbody>${tableRows}</tbody></table>`).addTo(map);
         });
 
         map.on('click', 'clusters', (e) => {
@@ -197,12 +226,13 @@
             });
         });
 
-        map.on('mouseenter', 'clusters', () => map.getCanvas().style.cursor = 'pointer');
-        map.on('mouseleave', 'clusters', () => map.getCanvas().style.cursor = '');
-        map.on('mouseenter', 'unclustered-point', () => map.getCanvas().style.cursor = 'pointer');
-        map.on('mouseleave', 'unclustered-point', () => map.getCanvas().style.cursor = '');
+        // Mouse Feedback
+        const pointerLayers = ['clusters', 'unclustered-point'];
+        pointerLayers.forEach(l => {
+            map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
+        });
     });
 </script>
 </body>
 </html>
-
