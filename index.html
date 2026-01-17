@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit - Basemap Toggle</title>
+    <title>GTA Transit - OSM & Satellite Toggle</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
-        /* UI Controls */
         .map-overlay {
             position: absolute;
             top: 15px;
             right: 15px;
-            z-index: 10; /* Ensure it stays above the map */
+            z-index: 10;
         }
         .toggle-btn {
             background: white;
@@ -26,9 +25,8 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             font-weight: bold;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: all 0.2s;
         }
-        .toggle-btn:hover { background: #f0f7ff; transform: translateY(-1px); }
+        .toggle-btn:hover { background: #f0f7ff; }
 
         .maplibregl-popup-content { font-family: Arial, sans-serif; padding: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -47,7 +45,26 @@
 <script>
     const map = new maplibregl.Map({
         container: 'map',
-        style: 'https://demotiles.maplibre.org/style.json', 
+        // Defining a blank style allows us to add OSM as a source manually
+        style: {
+            "version": 8,
+            "sources": {
+                "osm-tiles": {
+                    "type": "raster",
+                    "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+                    "tileSize": 256,
+                    "attribution": "&copy; OpenStreetMap contributors"
+                }
+            },
+            "layers": [
+                {
+                    "id": "osm-layer",
+                    "type": "raster",
+                    "source": "osm-tiles",
+                    "paint": { "raster-opacity": 1 }
+                }
+            ]
+        },
         center: [-79.644, 43.595],
         zoom: 10
     });
@@ -70,17 +87,15 @@
             clusterRadius: 40 
         });
 
-        // 3. SATELLITE LAYER 
-        // We add this layer but keep it hidden initially
+        // 3. SATELLITE LAYER (Hidden by default)
         map.addLayer({
             'id': 'satellite-layer',
             'type': 'raster',
             'source': 'esri-imagery',
-            'layout': { 'visibility': 'none' },
-            'paint': { 'raster-opacity': 1 }
+            'layout': { 'visibility': 'none' }
         });
 
-        // 4. TRANSIT LAYERS (Always stay on top)
+        // 4. TRANSIT LAYERS
         map.addLayer({
             id: 'clusters',
             type: 'circle',
@@ -101,7 +116,6 @@
             filter: ['has', 'point_count'],
             layout: {
                 'text-field': '{point_count_abbreviated}',
-                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
                 'text-size': 14
             },
             paint: { 'text-color': '#ffffff' }
@@ -123,20 +137,22 @@
         // 5. TOGGLE FUNCTION
         const toggleBtn = document.getElementById('basemap-toggle');
         toggleBtn.addEventListener('click', () => {
-            const visibility = map.getLayoutProperty('satellite-layer', 'visibility');
+            const isSatVisible = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
             
-            if (visibility === 'visible') {
+            if (isSatVisible) {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+                map.setLayoutProperty('osm-layer', 'visibility', 'visible');
                 toggleBtn.innerText = 'SATELLITE VIEW';
                 toggleBtn.style.background = "white";
                 toggleBtn.style.color = "black";
             } else {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-                toggleBtn.innerText = 'STREET VIEW';
+                map.setLayoutProperty('osm-layer', 'visibility', 'none');
+                toggleBtn.innerText = 'STREET VIEW (OSM)';
                 toggleBtn.style.background = "#0062d2";
                 toggleBtn.style.color = "white";
                 
-                // MOVE SATELLITE TO BOTTOM: This ensures it doesn't cover your dots
+                // Ensure data stays on top
                 map.moveLayer('satellite-layer', 'clusters');
             }
         });
