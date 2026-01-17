@@ -3,38 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA Transit - Toggle Map</title>
+    <title>GTA Transit - Basemap Toggle</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #333; }
         
-        /* Toggle Button Styling */
+        /* UI Controls */
         .map-overlay {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1;
+            top: 15px;
+            right: 15px;
+            z-index: 10; /* Ensure it stays above the map */
         }
         .toggle-btn {
             background: white;
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            padding: 10px 15px;
+            border: 2px solid #0062d2;
+            border-radius: 6px;
             cursor: pointer;
-            font-family: Arial, sans-serif;
-            font-size: 13px;
+            font-family: 'Segoe UI', Arial, sans-serif;
             font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: all 0.2s;
         }
-        .toggle-btn:hover { background: #f9f9f9; }
+        .toggle-btn:hover { background: #f0f7ff; transform: translateY(-1px); }
 
-        .maplibregl-popup-content {
-            font-family: Arial, sans-serif;
-            padding: 12px;
-            border-radius: 8px;
-        }
+        .maplibregl-popup-content { font-family: Arial, sans-serif; padding: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         th { border-bottom: 2px solid #eee; text-align: left; padding: 4px; font-size: 12px; }
         td { border-bottom: 1px solid #f9f9f9; padding: 4px; font-size: 12px; }
@@ -43,7 +39,7 @@
 <body>
 
 <div class="map-overlay">
-    <button id="basemap-toggle" class="toggle-btn">Switch to Satellite</button>
+    <button id="basemap-toggle" class="toggle-btn">SATELLITE VIEW</button>
 </div>
 
 <div id="map"></div>
@@ -65,16 +61,7 @@
             'attribution': 'Tiles &copy; Esri'
         });
         
-        // 2. ADD SATELLITE LAYER 
-        // We set visibility to 'none' by default so it starts in "Street" mode
-        map.addLayer({
-            'id': 'satellite-layer',
-            'type': 'raster',
-            'source': 'esri-imagery',
-            'layout': { 'visibility': 'none' }
-        }, map.getStyle().layers[0].id); // Keep it behind labels and data
-
-        // 3. ADD BUS DATA
+        // 2. DATA SOURCE
         map.addSource('bus-stops', {
             type: 'geojson',
             data: './data/stops.geojson', 
@@ -83,7 +70,17 @@
             clusterRadius: 40 
         });
 
-        // 4. CLUSTER SYMBOLOGY
+        // 3. SATELLITE LAYER 
+        // We add this layer but keep it hidden initially
+        map.addLayer({
+            'id': 'satellite-layer',
+            'type': 'raster',
+            'source': 'esri-imagery',
+            'layout': { 'visibility': 'none' },
+            'paint': { 'raster-opacity': 1 }
+        });
+
+        // 4. TRANSIT LAYERS (Always stay on top)
         map.addLayer({
             id: 'clusters',
             type: 'circle',
@@ -123,21 +120,28 @@
             }
         });
 
-        // 5. TOGGLE LOGIC
+        // 5. TOGGLE FUNCTION
         const toggleBtn = document.getElementById('basemap-toggle');
         toggleBtn.addEventListener('click', () => {
-            const isSatellite = map.getLayoutProperty('satellite-layer', 'visibility') === 'visible';
+            const visibility = map.getLayoutProperty('satellite-layer', 'visibility');
             
-            if (isSatellite) {
+            if (visibility === 'visible') {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'none');
-                toggleBtn.innerText = 'Switch to Satellite';
+                toggleBtn.innerText = 'SATELLITE VIEW';
+                toggleBtn.style.background = "white";
+                toggleBtn.style.color = "black";
             } else {
                 map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-                toggleBtn.innerText = 'Switch to Street';
+                toggleBtn.innerText = 'STREET VIEW';
+                toggleBtn.style.background = "#0062d2";
+                toggleBtn.style.color = "white";
+                
+                // MOVE SATELLITE TO BOTTOM: This ensures it doesn't cover your dots
+                map.moveLayer('satellite-layer', 'clusters');
             }
         });
 
-        // 6. POPUP & INTERACTION (Your original working code)
+        // 6. POPUPS & INTERACTION
         map.on('click', 'unclustered-point', (e) => {
             const coordinates = e.features[0].geometry.coordinates.slice(0, 2);
             const stopNum = e.features[0].properties.StopNumber;
