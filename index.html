@@ -8,9 +8,9 @@
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         body { margin: 0; padding: 0; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #222; }
+        /* Default background is white */
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
         
-        /* Container for all UI elements in the Top Right */
         .ui-container {
             position: absolute;
             top: 15px;
@@ -30,8 +30,9 @@
             cursor: pointer;
             font-family: sans-serif;
             font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            width: 220px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 240px;
+            text-align: center;
         }
 
         .legend {
@@ -39,18 +40,18 @@
             padding: 15px;
             border-radius: 8px;
             font-family: sans-serif;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            width: 220px;
-            max-height: 70vh;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            width: 210px;
+            max-height: 75vh;
             overflow-y: auto;
         }
 
         .legend h4 { margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .legend-section { margin-bottom: 12px; }
-        .legend-section-title { font-size: 10px; font-weight: bold; color: #777; text-transform: uppercase; margin-bottom: 5px; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; cursor: pointer; }
+        .legend-section { margin-bottom: 15px; }
+        .legend-section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; cursor: pointer; }
         .legend-key { width: 25px; height: 3px; margin-right: 10px; border-radius: 2px; }
-        .circle-key { width: 12px; height: 12px; border-radius: 50%; }
+        .circle-key { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
 
         .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; }
@@ -64,38 +65,16 @@
 
     <div class="legend">
         <h4>Map Layers</h4>
-        
         <div class="legend-section">
             <div class="legend-section-title">Transit</div>
-            <div class="legend-item">
-                <input type="checkbox" id="check-clusters" checked>
-                <span class="legend-key circle-key" style="background: #0062d2; margin-left:8px;"></span>
-                Clusters
-            </div>
-            <div class="legend-item">
-                <input type="checkbox" id="check-stops" checked>
-                <span class="legend-key circle-key" style="background: #f1c40f; margin-left:8px;"></span>
-                Bus Stops
-            </div>
+            <div class="legend-item"><input type="checkbox" id="check-clusters" checked><span class="legend-key circle-key" style="background: #0062d2; margin-left:8px;"></span>Clusters</div>
+            <div class="legend-item"><input type="checkbox" id="check-stops" checked><span class="legend-key circle-key" style="background: #f1c40f; margin-left:8px;"></span>Bus Stops</div>
         </div>
-
         <div class="legend-section">
             <div class="legend-section-title">Infrastructure</div>
-            <div class="legend-item">
-                <input type="checkbox" id="check-roads" checked>
-                <span class="legend-key" style="background: #ff5722; margin-left:8px;"></span>
-                Road Network
-            </div>
-            <div class="legend-item">
-                <input type="checkbox" id="check-streets">
-                <span class="legend-key" style="background: #9e9e9e; margin-left:8px;"></span>
-                Centrelines
-            </div>
-            <div class="legend-item">
-                <input type="checkbox" id="check-boundary" checked>
-                <span class="legend-key" style="background: transparent; border: 2px dashed #673ab7; height: 0; margin-left:8px;"></span>
-                Boundary
-            </div>
+            <div class="legend-item"><input type="checkbox" id="check-roads" checked><span class="legend-key" style="background: #ff5722; margin-left:8px;"></span>Road Network</div>
+            <div class="legend-item"><input type="checkbox" id="check-streets"><span class="legend-key" style="background: #9e9e9e; margin-left:8px;"></span>Centrelines</div>
+            <div class="legend-item"><input type="checkbox" id="check-boundary" checked><span class="legend-key" style="background: transparent; border: 2px dashed #673ab7; height: 0; margin-left:8px;"></span>Boundary</div>
         </div>
     </div>
 </div>
@@ -103,8 +82,8 @@
 <div id="map"></div>
 
 <script>
-    // Configuration for basemap states
-    const basemaps = ['osm', 'satellite', 'none'];
+    // Define the cycle of basemaps
+    const basemaps = ['osm', 'satellite', 'none-white', 'none-black'];
     let currentBasemapIndex = 0;
 
     const map = new maplibregl.Map({
@@ -127,11 +106,7 @@
 
     map.on('load', () => {
         // --- SOURCES ---
-        map.addSource('esri-imagery', {
-            'type': 'raster',
-            'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-            'tileSize': 256
-        });
+        map.addSource('esri-imagery', { 'type': 'raster', 'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], 'tileSize': 256 });
         map.addSource('bus-stops', { type: 'geojson', data: './data/stops.geojson', cluster: true, clusterMaxZoom: 14, clusterRadius: 40 });
         map.addSource('municipal-boundary', { type: 'geojson', data: './data/Municipal_Boundary.geojson' });
         map.addSource('road-network', { type: 'geojson', data: './data/MOP_LongTermRoadNetwork.geojson' });
@@ -139,43 +114,41 @@
 
         // --- LAYERS ---
         map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery', 'layout': { 'visibility': 'none' } });
-        
         map.addLayer({ 'id': 'boundary-layer', 'type': 'line', 'source': 'municipal-boundary', 'paint': { 'line-color': '#673ab7', 'line-width': 3, 'line-dasharray': [2, 1] } });
-        
         map.addLayer({ 'id': 'streets-layer', 'type': 'line', 'source': 'street-centreline', 'layout': { 'visibility': 'none' }, 'paint': { 'line-color': '#9e9e9e', 'line-width': 1, 'line-opacity': 0.6 } });
-
         map.addLayer({ 'id': 'roads-layer', 'type': 'line', 'source': 'road-network', 'paint': { 'line-color': '#ff5722', 'line-width': ['step', ['zoom'], 1, 12, 2, 15, 4] } });
-
         map.addLayer({ id: 'clusters', type: 'circle', source: 'bus-stops', filter: ['has', 'point_count'], paint: { 'circle-color': '#0062d2', 'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } });
-
         map.addLayer({ id: 'cluster-count', type: 'symbol', source: 'bus-stops', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 }, paint: { 'text-color': '#ffffff' } });
-
         map.addLayer({ id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': '#f1c40f', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#000000' } });
 
-        // --- UI LOGIC ---
-
-        // Cycle through: OSM -> Satellite -> None
+        // --- 4-WAY BASEMAP CYCLE ---
+        const mapContainer = document.getElementById('map');
         document.getElementById('basemap-toggle').addEventListener('click', (e) => {
             currentBasemapIndex = (currentBasemapIndex + 1) % basemaps.length;
             const state = basemaps[currentBasemapIndex];
 
+            // Reset visibilities
+            map.setLayoutProperty('osm-layer', 'visibility', 'none');
+            map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+
             if (state === 'osm') {
                 map.setLayoutProperty('osm-layer', 'visibility', 'visible');
-                map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+                mapContainer.style.backgroundColor = '#ffffff';
                 e.target.innerText = 'BASEMAP: STREETS (OSM)';
             } else if (state === 'satellite') {
-                map.setLayoutProperty('osm-layer', 'visibility', 'none');
                 map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
                 map.moveLayer('satellite-layer', 'boundary-layer');
                 e.target.innerText = 'BASEMAP: SATELLITE';
-            } else {
-                map.setLayoutProperty('osm-layer', 'visibility', 'none');
-                map.setLayoutProperty('satellite-layer', 'visibility', 'none');
-                e.target.innerText = 'BASEMAP: NONE';
+            } else if (state === 'none-white') {
+                mapContainer.style.backgroundColor = '#ffffff';
+                e.target.innerText = 'BASEMAP: NONE (WHITE)';
+            } else if (state === 'none-black') {
+                mapContainer.style.backgroundColor = '#111111';
+                e.target.innerText = 'BASEMAP: NONE (BLACK)';
             }
         });
 
-        // Toggles
+        // --- LAYER TOGGLES ---
         const setupToggle = (id, layerIds) => {
             document.getElementById(id).addEventListener('change', (e) => {
                 const vis = e.target.checked ? 'visible' : 'none';
@@ -188,7 +161,7 @@
         setupToggle('check-streets', ['streets-layer']);
         setupToggle('check-boundary', ['boundary-layer']);
 
-        // --- POPUPS ---
+        // --- INTERACTION ---
         map.on('click', 'unclustered-point', (e) => {
             const props = e.features[0].properties;
             const features = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
@@ -201,7 +174,7 @@
                 if (!err) map.easeTo({ center: e.features[0].geometry.coordinates, zoom: zoom });
             });
         });
-
+        
         const hoverLayers = ['clusters', 'unclustered-point'];
         hoverLayers.forEach(l => {
             map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
