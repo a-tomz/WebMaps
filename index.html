@@ -12,6 +12,23 @@
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
         
+        /* Title Styling */
+        .map-title {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-family: sans-serif;
+            border-left: 5px solid #0062d2;
+        }
+        .map-title h2 { margin: 0; font-size: 18px; color: #333; }
+        .map-title p { margin: 5px 0 0 0; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* UI Container (Right Side) */
         .ui-container {
             position: absolute;
             top: 15px;
@@ -43,7 +60,7 @@
             font-family: sans-serif;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             width: 230px;
-            max-height: 80vh;
+            max-height: 75vh;
             overflow-y: auto;
         }
 
@@ -70,7 +87,6 @@
         .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; }
         .clear-btn:hover { background: #d32f2f; color: white; }
 
-        /* Scannable Popup Table */
         .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; padding: 15px; min-width: 180px; }
         .popup-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         .popup-table th { background: #f4f4f4; text-align: left; padding: 5px; font-size: 10px; text-transform: uppercase; }
@@ -79,6 +95,11 @@
     </style>
 </head>
 <body>
+
+<div class="map-title">
+    <h2>Mississauga Transit Explorer</h2>
+    <p>Infrastructure & Spatial Analysis Dashboard</p>
+</div>
 
 <div class="ui-container">
     <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS (OSM)</button>
@@ -132,16 +153,17 @@
         zoom: 11
     });
 
+    // Add Scale Bar to Bottom Left
+    const scale = new maplibregl.ScaleControl({
+        maxWidth: 200,
+        unit: 'metric'
+    });
+    map.addControl(scale, 'bottom-left');
+
     map.on('load', () => {
         // --- SOURCES ---
         map.addSource('esri-imagery', { 'type': 'raster', 'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], 'tileSize': 256 });
-        map.addSource('bus-stops', { 
-            type: 'geojson', 
-            data: './data/stops.geojson', 
-            cluster: true, 
-            clusterMaxZoom: 14, 
-            clusterRadius: 40 
-        });
+        map.addSource('bus-stops', { type: 'geojson', data: './data/stops.geojson', cluster: true, clusterMaxZoom: 14, clusterRadius: 40 });
         map.addSource('municipal-boundary', { type: 'geojson', data: './data/Municipal_Boundary.geojson' });
         map.addSource('road-network', { type: 'geojson', data: './data/MOP_LongTermRoadNetwork.geojson' });
         map.addSource('street-centreline', { type: 'geojson', data: './data/StreetCentreline.geojson' });
@@ -183,36 +205,14 @@
             if (map.getLayer('buffer-layer')) map.setLayoutProperty('buffer-layer', 'visibility', 'none');
         });
 
-        // --- INTERACTION & FIXED POPUP LOGIC ---
+        // --- INTERACTION ---
         map.on('click', 'unclustered-point', (e) => {
             const coordinates = e.features[0].geometry.coordinates.slice();
             const stopNum = e.features[0].properties.StopNumber;
-
-            // Find ALL features at the clicked point, not just the first one
-            const featuresAtPoint = map.queryRenderedFeatures(e.point, {
-                layers: ['unclustered-point']
-            });
-
-            // Create a unique list of routes based on the features found
-            let rows = featuresAtPoint.map(f => `
-                <tr>
-                    <td><strong>${f.properties.Route || 'N/A'}</strong></td>
-                    <td>${f.properties.Effective_ || 'N/A'}</td>
-                </tr>
-            `).join('');
-
-            const content = `
-                <div class="stop-header">Stop #${stopNum}</div>
-                <table class="popup-table">
-                    <thead><tr><th>Route</th><th>Effective</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-
-            new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(content)
-                .addTo(map);
+            const featuresAtPoint = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
+            let rows = featuresAtPoint.map(f => `<tr><td><strong>${f.properties.Route || 'N/A'}</strong></td><td>${f.properties.Effective_ || 'N/A'}</td></tr>`).join('');
+            const content = `<div class="stop-header">Stop #${stopNum}</div><table class="popup-table"><thead><tr><th>Route</th><th>Effective</th></tr></thead><tbody>${rows}</tbody></table>`;
+            new maplibregl.Popup().setLngLat(coordinates).setHTML(content).addTo(map);
         });
 
         // --- BASEMAP & UI TOGGLES ---
