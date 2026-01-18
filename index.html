@@ -12,6 +12,22 @@
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
         
+        /* NEW: Title Styling */
+        .map-title {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-family: sans-serif;
+            border-left: 5px solid #0062d2;
+        }
+        .map-title h2 { margin: 0; font-size: 18px; color: #333; }
+        .map-title p { margin: 5px 0 0 0; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+
         .ui-container {
             position: absolute;
             top: 15px;
@@ -43,7 +59,7 @@
             font-family: sans-serif;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             width: 230px;
-            max-height: 80vh;
+            max-height: 75vh;
             overflow-y: auto;
         }
 
@@ -71,7 +87,6 @@
         .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; }
         .clear-btn:hover { background: #d32f2f; color: white; }
 
-        /* Distance Label */
         .distance-container {
             position: absolute;
             bottom: 40px;
@@ -97,6 +112,11 @@
     </style>
 </head>
 <body>
+
+<div class="map-title">
+    <h2>Mississauga Transit Explorer</h2>
+    <p>Infrastructure & Spatial Analysis</p>
+</div>
 
 <div id="distance-label" class="distance-container">Distance: 0.00 km</div>
 
@@ -140,7 +160,6 @@
     const basemaps = ['osm', 'satellite', 'none-white', 'none-black'];
     let currentBasemapIndex = 0;
 
-    // Measurement State
     let measureMode = false;
     let measurePoints = [];
 
@@ -156,6 +175,12 @@
         center: [-79.644, 43.595],
         zoom: 11
     });
+
+    // NEW: Add Scale Bar to bottom left
+    map.addControl(new maplibregl.ScaleControl({
+        maxWidth: 200,
+        unit: 'metric'
+    }), 'bottom-left');
 
     map.on('load', () => {
         // --- SOURCES ---
@@ -194,16 +219,13 @@
         // --- DISTANCE MEASURER LOGIC ---
         map.on('click', (e) => {
             if (!measureMode) return;
-
             const point = [e.lngLat.lng, e.lngLat.lat];
             measurePoints.push(point);
-
             if (measurePoints.length > 1) {
                 const line = turf.lineString(measurePoints);
                 const length = turf.length(line, {units: 'kilometers'}).toFixed(2);
                 document.getElementById('distance-label').innerText = `Distance: ${length} km`;
                 document.getElementById('distance-label').style.display = 'block';
-
                 if (map.getSource('measure-source')) {
                     map.getSource('measure-source').setData(line);
                 } else {
@@ -216,7 +238,7 @@
         // --- UI ACTIONS ---
         document.getElementById('btn-measure').addEventListener('click', function() {
             measureMode = !measureMode;
-            measurePoints = []; // Reset points on toggle
+            measurePoints = [];
             this.classList.toggle('active-tool');
             if (!measureMode) {
                 document.getElementById('distance-label').style.display = 'none';
@@ -240,7 +262,6 @@
 
         document.getElementById('btn-clear-analysis').addEventListener('click', () => {
             if (map.getLayer('buffer-layer')) map.setLayoutProperty('buffer-layer', 'visibility', 'none');
-            // Also clear distance measurement
             measurePoints = [];
             document.getElementById('distance-label').style.display = 'none';
             if (map.getLayer('measure-layer')) map.removeLayer('measure-layer');
@@ -251,26 +272,12 @@
 
         // --- INTERACTION & POPUP LOGIC ---
         map.on('click', 'unclustered-point', (e) => {
-            if (measureMode) return; // Don't show popups during measurement
+            if (measureMode) return;
             const coordinates = e.features[0].geometry.coordinates.slice();
             const stopNum = e.features[0].properties.StopNumber;
             const featuresAtPoint = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
-
-            let rows = featuresAtPoint.map(f => `
-                <tr>
-                    <td><strong>${f.properties.Route || 'N/A'}</strong></td>
-                    <td>${f.properties.Effective_ || 'N/A'}</td>
-                </tr>
-            `).join('');
-
-            const content = `
-                <div class="stop-header">Stop #${stopNum}</div>
-                <table class="popup-table">
-                    <thead><tr><th>Route</th><th>Effective</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
-
+            let rows = featuresAtPoint.map(f => `<tr><td><strong>${f.properties.Route || 'N/A'}</strong></td><td>${f.properties.Effective_ || 'N/A'}</td></tr>`).join('');
+            const content = `<div class="stop-header">Stop #${stopNum}</div><table class="popup-table"><thead><tr><th>Route</th><th>Effective</th></tr></thead><tbody>${rows}</tbody></table>`;
             new maplibregl.Popup().setLngLat(coordinates).setHTML(content).addTo(map);
         });
 
