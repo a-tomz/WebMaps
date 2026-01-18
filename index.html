@@ -3,173 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mississauga Transit & Infrastructure Analytics</title>
+    <title>Mississauga Transit Dashboard</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; transition: background-color 0.3s; }
-        
-        /* UI Elements */
-        .map-title { position: absolute; top: 15px; left: 15px; z-index: 10; background: rgba(255, 255, 255, 0.9); padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border-left: 5px solid #0062d2; }
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
+        .map-title { position: absolute; top: 15px; left: 15px; z-index: 10; background: rgba(255, 255, 255, 0.9); padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-family: sans-serif; border-left: 5px solid #0062d2; }
         .map-title h2 { margin: 0; font-size: 18px; color: #333; }
         .map-title p { margin: 5px 0 0 0; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-
         .ui-container { position: absolute; top: 15px; right: 15px; z-index: 10; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
-        .legend { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: 240px; max-height: 80vh; overflow-y: auto; }
-        
-        .toggle-btn { background: white; padding: 10px 15px; border: 2px solid #0062d2; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 5px; }
+        .toggle-btn { background: white; padding: 10px 15px; border: 2px solid #0062d2; border-radius: 6px; cursor: pointer; font-family: sans-serif; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 260px; text-align: center; }
+        .legend { background: white; padding: 15px; border-radius: 8px; font-family: sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: 230px; max-height: 75vh; overflow-y: auto; }
+        .legend h4 { margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .legend-section { margin-bottom: 15px; }
+        .legend-section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 11px; cursor: pointer; }
+        .legend-key { width: 25px; height: 3px; margin-right: 10px; border-radius: 2px; flex-shrink: 0; }
+        .circle-key { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
         .analysis-btn { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #0062d2; border-radius: 4px; background: #f0f7ff; color: #0062d2; font-weight: bold; cursor: pointer; font-size: 10px; }
         .analysis-btn:hover { background: #0062d2; color: white; }
-        .active-tool { background: #0062d2 !important; color: white !important; }
         .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; }
-
-        /* Measurement Label */
-        .distance-container { position: absolute; bottom: 40px; left: 15px; z-index: 10; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; display: none; }
-
-        .legend-section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin: 10px 0 8px 0; border-bottom: 1px solid #eee; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; }
-        .legend-key { width: 20px; height: 3px; margin-right: 10px; }
+        .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; padding: 15px; min-width: 180px; }
+        .popup-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .popup-table th { background: #f4f4f4; text-align: left; padding: 5px; font-size: 10px; }
+        .popup-table td { padding: 5px; border-bottom: 1px solid #eee; }
+        .stop-header { color: #0062d2; font-size: 14px; border-bottom: 2px solid #0062d2; padding-bottom: 3px; }
     </style>
 </head>
 <body>
 
 <div class="map-title">
-    <h2>Mississauga Analytics</h2>
-    <p>Transit Density & Measurements</p>
+    <h2>Mississauga Transit Explorer</h2>
+    <p>Infrastructure & Spatial Analysis</p>
 </div>
 
-<div class="distance-container" id="distance-label">Distance: 0 km</div>
-
 <div class="ui-container">
-    <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS</button>
-    
+    <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS (OSM)</button>
     <div class="legend">
-        <div class="legend-section-title">Visuals</div>
-        <div class="legend-item"><input type="checkbox" id="check-heatmap"> Transit Heatmap</div>
-        <div class="legend-item"><input type="checkbox" id="check-stops" checked> Stop Locations</div>
-
-        <div class="legend-section-title">Analysis Tools</div>
-        <button id="btn-measure" class="analysis-btn">MEASURE DISTANCE</button>
-        <button id="btn-coverage" class="analysis-btn">400M SERVICE AREA</button>
-        <button id="btn-clear" class="analysis-btn clear-btn">CLEAR ALL ANALYSIS</button>
-
-        <div class="legend-section-title">Infrastructure</div>
-        <div class="legend-item"><input type="checkbox" id="check-roads" checked> Road Hierarchy</div>
+        <h4>Map Layers</h4>
+        <div class="legend-section">
+            <div class="legend-section-title">Transit</div>
+            <div class="legend-item"><input type="checkbox" id="check-clusters" checked><span class="legend-key circle-key" style="background: #0062d2; margin-left:8px;"></span>Clusters</div>
+            <div class="legend-item"><input type="checkbox" id="check-stops" checked><span class="legend-key circle-key" style="background: #f1c40f; margin-left:8px;"></span>Bus Stops</div>
+        </div>
+        <div class="legend-section">
+            <div class="legend-section-title">Analysis Tools</div>
+            <button id="btn-analyze-coverage" class="analysis-btn">CALCULATE 400M COVERAGE</button>
+            <button id="btn-clear-analysis" class="analysis-btn clear-btn">DELETE RESULTS</button>
+        </div>
+        <div class="legend-section">
+            <div class="legend-section-title">Road Hierarchy</div>
+            <div class="legend-item"><input type="checkbox" id="check-roads" checked><span class="legend-key" style="background: #d32f2f; margin-left:8px;"></span>Arterial</div>
+            <div class="legend-item"><span class="legend-key" style="background: #1976d2; margin-left:35px;"></span>Major Collector</div>
+        </div>
     </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    /* DATA PLACEHOLDERS - Paste your full JSON content here */
-    const stopsData = { "type": "FeatureCollection", "features": [] }; 
-    const roadsData = { "type": "FeatureCollection", "features": [] };
-    const boundaryData = { "type": "FeatureCollection", "features": [] };
+    // Copy/Paste the contents of your GeoJSON files here
+    const stopsGeoJSON = { "type": "FeatureCollection", "features": [] }; // Replace [] with contents of stops.geojson
+    const boundaryGeoJSON = { "type": "FeatureCollection", "features": [] }; // Replace [] with contents of Municipal_Boundary.geojson
+    const roadsGeoJSON = { "type": "FeatureCollection", "features": [] }; // Replace [] with contents of MOP_LongTermRoadNetwork.geojson
+    const streetsGeoJSON = { "type": "FeatureCollection", "features": [] }; // Replace [] with contents of StreetCentreline.geojson
+</script>
+<script>
+    const basemaps = ['osm', 'satellite', 'none-white', 'none-black'];
+    let currentBasemapIndex = 0;
 
     const map = new maplibregl.Map({
         container: 'map',
         style: {
             "version": 8,
-            "sources": { "osm": { "type": "raster", "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], "tileSize": 256 } },
-            "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm" }]
+            "sources": {
+                "osm-tiles": { "type": "raster", "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], "tileSize": 256 }
+            },
+            "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm-tiles" }]
         },
         center: [-79.644, 43.595],
         zoom: 11
     });
 
-    map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
-
-    let measureMode = false;
-    let measurePoints = [];
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     map.on('load', () => {
-        map.addSource('stops', { type: 'geojson', data: stopsData });
-        map.addSource('roads', { type: 'geojson', data: roadsData });
+        // We use the variables defined above instead of external file paths
+        map.addSource('bus-stops', { type: 'geojson', data: stopsGeoJSON, cluster: true, clusterRadius: 40 });
+        map.addSource('municipal-boundary', { type: 'geojson', data: boundaryGeoJSON });
+        map.addSource('road-network', { type: 'geojson', data: roadsGeoJSON });
+        map.addSource('street-centreline', { type: 'geojson', data: streetsGeoJSON });
 
-        // --- HEATMAP LAYER ---
-        map.addLayer({
-            id: 'stops-heat',
-            type: 'heatmap',
-            source: 'stops',
-            layout: { 'visibility': 'none' },
-            paint: {
-                'heatmap-weight': 1,
-                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 15, 3],
-                'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(0,0,255,0)', 0.2, 'blue', 0.4, 'cyan', 0.6, 'lime', 0.8, 'yellow', 1, 'red'],
-                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 15, 20],
-                'heatmap-opacity': 0.7
+        // Add layers (using same logic as before)
+        map.addLayer({ 'id': 'boundary-layer', 'type': 'line', 'source': 'municipal-boundary', 'paint': { 'line-color': '#673ab7', 'line-width': 2 } });
+        map.addLayer({ 'id': 'roads-layer', 'type': 'line', 'source': 'road-network', 'paint': { 'line-color': '#ff5722', 'line-width': 2 } });
+        map.addLayer({ id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': '#f1c40f', 'circle-radius': 6 } });
+        
+        // --- ANALYSIS LOGIC ---
+        document.getElementById('btn-analyze-coverage').addEventListener('click', () => {
+            const buffered = turf.buffer(stopsGeoJSON, 0.4, {units: 'kilometers'});
+            if (map.getSource('buffer-result')) {
+                map.getSource('buffer-result').setData(buffered);
+            } else {
+                map.addSource('buffer-result', { type: 'geojson', data: buffered });
+                map.addLayer({ 'id': 'buffer-layer', 'type': 'fill', 'source': 'buffer-result', 'paint': { 'fill-color': '#0062d2', 'fill-opacity': 0.2 } }, 'boundary-layer');
             }
-        });
-
-        // --- STOPS LAYER ---
-        map.addLayer({
-            id: 'stops-point',
-            type: 'circle',
-            source: 'stops',
-            paint: { 'circle-color': '#f1c40f', 'circle-radius': 4, 'circle-stroke-width': 1 }
-        });
-
-        // --- ROADS LAYER ---
-        map.addLayer({
-            id: 'roads-line',
-            type: 'line',
-            source: 'roads',
-            paint: { 'line-color': '#ff5722', 'line-width': 1.5, 'line-opacity': 0.6 }
-        });
-
-        // --- DISTANCE MEASURER LOGIC ---
-        map.on('click', (e) => {
-            if (!measureMode) return;
-
-            const point = [e.lngLat.lng, e.lngLat.lat];
-            measurePoints.push(point);
-
-            if (measurePoints.length > 1) {
-                const line = turf.lineString(measurePoints);
-                const length = turf.length(line, {units: 'kilometers'}).toFixed(2);
-                document.getElementById('distance-label').innerText = `Distance: ${length} km`;
-                document.getElementById('distance-label').style.display = 'block';
-
-                if (map.getSource('measure-source')) {
-                    map.getSource('measure-source').setData(line);
-                } else {
-                    map.addSource('measure-source', { type: 'geojson', data: line });
-                    map.addLayer({ id: 'measure-layer', type: 'line', source: 'measure-source', paint: { 'line-color': '#0062d2', 'line-width': 3, 'line-dasharray': [1, 1] } });
-                }
-            }
-        });
-
-        // --- UI ACTIONS ---
-        document.getElementById('btn-measure').addEventListener('click', function() {
-            measureMode = !measureMode;
-            measurePoints = [];
-            this.classList.toggle('active-tool');
-            if (!measureMode) document.getElementById('distance-label').style.display = 'none';
-        });
-
-        document.getElementById('check-heatmap').addEventListener('change', (e) => {
-            map.setLayoutProperty('stops-heat', 'visibility', e.target.checked ? 'visible' : 'none');
-        });
-
-        document.getElementById('btn-coverage').addEventListener('click', () => {
-            const buffered = turf.buffer(stopsData, 0.4, {units: 'kilometers'});
-            if (map.getSource('buffer')) map.getSource('buffer').setData(buffered);
-            else {
-                map.addSource('buffer', { type: 'geojson', data: buffered });
-                map.addLayer({ id: 'buffer-layer', type: 'fill', source: 'buffer', paint: { 'fill-color': '#0062d2', 'fill-opacity': 0.2 } });
-            }
-        });
-
-        document.getElementById('btn-clear').addEventListener('click', () => {
-            if (map.getLayer('buffer-layer')) map.removeLayer('buffer-layer');
-            if (map.getSource('buffer')) map.removeSource('buffer');
-            if (map.getLayer('measure-layer')) map.removeLayer('measure-layer');
-            if (map.getSource('measure-source')) map.removeSource('measure-source');
-            measurePoints = [];
-            document.getElementById('distance-label').style.display = 'none';
         });
     });
 </script>
