@@ -3,262 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mississauga Transit & Infrastructure Analysis</title>
+    <title>Mississauga Transit & Infrastructure Analytics</title>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     
     <style>
-        body { margin: 0; padding: 0; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; background-color: #ffffff; transition: background-color 0.3s; }
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; transition: background-color 0.3s; }
         
-        /* Title Styling */
-        .map-title {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 10;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            font-family: sans-serif;
-            border-left: 5px solid #0062d2;
-        }
+        /* UI Elements */
+        .map-title { position: absolute; top: 15px; left: 15px; z-index: 10; background: rgba(255, 255, 255, 0.9); padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border-left: 5px solid #0062d2; }
         .map-title h2 { margin: 0; font-size: 18px; color: #333; }
         .map-title p { margin: 5px 0 0 0; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
 
-        /* UI Container (Right Side) */
-        .ui-container {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: flex-end;
-        }
-
-        .toggle-btn {
-            background: white;
-            padding: 10px 15px;
-            border: 2px solid #0062d2;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: sans-serif;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            width: 260px;
-            text-align: center;
-        }
-
-        .legend {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: sans-serif;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            width: 230px;
-            max-height: 75vh;
-            overflow-y: auto;
-        }
-
-        .legend h4 { margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .legend-section { margin-bottom: 15px; }
-        .legend-section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 11px; cursor: pointer; }
-        .legend-key { width: 25px; height: 3px; margin-right: 10px; border-radius: 2px; flex-shrink: 0; }
-        .circle-key { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
-
-        .analysis-btn {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #0062d2;
-            border-radius: 4px;
-            background: #f0f7ff;
-            color: #0062d2;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 10px;
-        }
+        .ui-container { position: absolute; top: 15px; right: 15px; z-index: 10; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+        .legend { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: 240px; max-height: 80vh; overflow-y: auto; }
+        
+        .toggle-btn { background: white; padding: 10px 15px; border: 2px solid #0062d2; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 5px; }
+        .analysis-btn { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #0062d2; border-radius: 4px; background: #f0f7ff; color: #0062d2; font-weight: bold; cursor: pointer; font-size: 10px; }
         .analysis-btn:hover { background: #0062d2; color: white; }
+        .active-tool { background: #0062d2 !important; color: white !important; }
         .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; }
-        .clear-btn:hover { background: #d32f2f; color: white; }
 
-        .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; padding: 15px; min-width: 180px; }
-        .popup-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .popup-table th { background: #f4f4f4; text-align: left; padding: 5px; font-size: 10px; text-transform: uppercase; }
-        .popup-table td { padding: 5px; border-bottom: 1px solid #eee; }
-        .stop-header { color: #0062d2; font-size: 14px; border-bottom: 2px solid #0062d2; padding-bottom: 3px; }
+        /* Measurement Label */
+        .distance-container { position: absolute; bottom: 40px; left: 15px; z-index: 10; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; display: none; }
+
+        .legend-section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin: 10px 0 8px 0; border-bottom: 1px solid #eee; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; }
+        .legend-key { width: 20px; height: 3px; margin-right: 10px; }
     </style>
 </head>
 <body>
 
 <div class="map-title">
-    <h2>Mississauga Transit Explorer</h2>
-    <p>Infrastructure & Spatial Analysis Dashboard</p>
+    <h2>Mississauga Analytics</h2>
+    <p>Transit Density & Measurements</p>
 </div>
 
+<div class="distance-container" id="distance-label">Distance: 0 km</div>
+
 <div class="ui-container">
-    <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS (OSM)</button>
-
+    <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS</button>
+    
     <div class="legend">
-        <h4>Map Layers</h4>
-        
-        <div class="legend-section">
-            <div class="legend-section-title">Transit</div>
-            <div class="legend-item"><input type="checkbox" id="check-clusters" checked><span class="legend-key circle-key" style="background: #0062d2; margin-left:8px;"></span>Clusters</div>
-            <div class="legend-item"><input type="checkbox" id="check-stops" checked><span class="legend-key circle-key" style="background: #f1c40f; margin-left:8px;"></span>Bus Stops</div>
-        </div>
+        <div class="legend-section-title">Visuals</div>
+        <div class="legend-item"><input type="checkbox" id="check-heatmap"> Transit Heatmap</div>
+        <div class="legend-item"><input type="checkbox" id="check-stops" checked> Stop Locations</div>
 
-        <div class="legend-section">
-            <div class="legend-section-title">Analysis Tools</div>
-            <button id="btn-analyze-coverage" class="analysis-btn">CALCULATE 400M COVERAGE</button>
-            <button id="btn-clear-analysis" class="analysis-btn clear-btn">DELETE RESULTS</button>
-        </div>
+        <div class="legend-section-title">Analysis Tools</div>
+        <button id="btn-measure" class="analysis-btn">MEASURE DISTANCE</button>
+        <button id="btn-coverage" class="analysis-btn">400M SERVICE AREA</button>
+        <button id="btn-clear" class="analysis-btn clear-btn">CLEAR ALL ANALYSIS</button>
 
-        <div class="legend-section">
-            <div class="legend-section-title">Road Hierarchy</div>
-            <div class="legend-item"><input type="checkbox" id="check-roads" checked><span class="legend-key" style="background: #d32f2f; margin-left:8px;"></span>Arterial</div>
-            <div class="legend-item"><span style="width:13px; display:inline-block;"></span><span class="legend-key" style="background: #1976d2; margin-left:8px;"></span>Major Collector</div>
-            <div class="legend-item"><span style="width:13px; display:inline-block;"></span><span class="legend-key" style="background: #388e3c; margin-left:8px;"></span>Minor Collector</div>
-        </div>
-
-        <div class="legend-section">
-            <div class="legend-section-title">Infrastructure</div>
-            <div class="legend-item"><input type="checkbox" id="check-streets"><span class="legend-key" style="background: #9e9e9e; margin-left:8px;"></span>Centrelines</div>
-            <div class="legend-item"><input type="checkbox" id="check-boundary" checked><span class="legend-key" style="background: transparent; border: 2px dashed #673ab7; height: 0; margin-left:8px;"></span>Boundary</div>
-        </div>
+        <div class="legend-section-title">Infrastructure</div>
+        <div class="legend-item"><input type="checkbox" id="check-roads" checked> Road Hierarchy</div>
     </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    const basemaps = ['osm', 'satellite', 'none-white', 'none-black'];
-    let currentBasemapIndex = 0;
+    /* DATA PLACEHOLDERS - Paste your full JSON content here */
+    const stopsData = { "type": "FeatureCollection", "features": [] }; 
+    const roadsData = { "type": "FeatureCollection", "features": [] };
+    const boundaryData = { "type": "FeatureCollection", "features": [] };
 
     const map = new maplibregl.Map({
         container: 'map',
         style: {
             "version": 8,
-            "sources": {
-                "osm-tiles": { "type": "raster", "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], "tileSize": 256, "attribution": "&copy; OpenStreetMap" }
-            },
-            "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm-tiles" }]
+            "sources": { "osm": { "type": "raster", "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], "tileSize": 256 } },
+            "layers": [{ "id": "osm-layer", "type": "raster", "source": "osm" }]
         },
         center: [-79.644, 43.595],
         zoom: 11
     });
 
-    // Add Scale Bar to Bottom Left
-    const scale = new maplibregl.ScaleControl({
-        maxWidth: 200,
-        unit: 'metric'
-    });
-    map.addControl(scale, 'bottom-left');
+    map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+    let measureMode = false;
+    let measurePoints = [];
 
     map.on('load', () => {
-        // --- SOURCES ---
-        map.addSource('esri-imagery', { 'type': 'raster', 'tiles': ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], 'tileSize': 256 });
-        map.addSource('bus-stops', { type: 'geojson', data: './data/stops.geojson', cluster: true, clusterMaxZoom: 14, clusterRadius: 40 });
-        map.addSource('municipal-boundary', { type: 'geojson', data: './data/Municipal_Boundary.geojson' });
-        map.addSource('road-network', { type: 'geojson', data: './data/MOP_LongTermRoadNetwork.geojson' });
-        map.addSource('street-centreline', { type: 'geojson', data: './data/StreetCentreline.geojson' });
+        map.addSource('stops', { type: 'geojson', data: stopsData });
+        map.addSource('roads', { type: 'geojson', data: roadsData });
 
-        // --- LAYERS ---
-        map.addLayer({ 'id': 'satellite-layer', 'type': 'raster', 'source': 'esri-imagery', 'layout': { 'visibility': 'none' } });
-        map.addLayer({ 'id': 'boundary-layer', 'type': 'line', 'source': 'municipal-boundary', 'paint': { 'line-color': '#673ab7', 'line-width': 3, 'line-dasharray': [2, 1] } });
-        map.addLayer({ 'id': 'streets-layer', 'type': 'line', 'source': 'street-centreline', 'layout': { 'visibility': 'none' }, 'paint': { 'line-color': '#9e9e9e', 'line-width': 1, 'line-opacity': 0.5 } });
-
+        // --- HEATMAP LAYER ---
         map.addLayer({
-            'id': 'roads-layer',
-            'type': 'line',
-            'source': 'road-network',
-            'paint': {
-                'line-color': ['match', ['get', 'Layer'], ['Arterial', 'RegionalArterial'], '#d32f2f', ['MajorCollector', 'MajorCollectorScenicRoute', 'RegionalMajorCollectorScenicRoute'], '#1976d2', ['MinorCollector', 'MinorCollectorScenicRoute', 'FutureMinorCollector'], '#388e3c', '#fb8c00'],
-                'line-width': ['match', ['get', 'Layer'], ['Arterial', 'RegionalArterial'], 3, ['MajorCollector', 'MajorCollectorScenicRoute'], 2, 1],
-                'line-opacity': 0.8
+            id: 'stops-heat',
+            type: 'heatmap',
+            source: 'stops',
+            layout: { 'visibility': 'none' },
+            paint: {
+                'heatmap-weight': 1,
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 15, 3],
+                'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(0,0,255,0)', 0.2, 'blue', 0.4, 'cyan', 0.6, 'lime', 0.8, 'yellow', 1, 'red'],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 15, 20],
+                'heatmap-opacity': 0.7
             }
         });
 
-        map.addLayer({ id: 'clusters', type: 'circle', source: 'bus-stops', filter: ['has', 'point_count'], paint: { 'circle-color': '#0062d2', 'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } });
-        map.addLayer({ id: 'cluster-count', type: 'symbol', source: 'bus-stops', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 }, paint: { 'text-color': '#ffffff' } });
-        map.addLayer({ id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': '#f1c40f', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#000000' } });
-
-        // --- ANALYSIS TOOLS ---
-        document.getElementById('btn-analyze-coverage').addEventListener('click', async () => {
-            const response = await fetch('./data/stops.geojson');
-            const data = await response.json();
-            const buffered = turf.buffer(data, 0.4, {units: 'kilometers'});
-            if (map.getSource('buffer-result')) {
-                map.getSource('buffer-result').setData(buffered);
-                map.setLayoutProperty('buffer-layer', 'visibility', 'visible');
-            } else {
-                map.addSource('buffer-result', { type: 'geojson', data: buffered });
-                map.addLayer({ 'id': 'buffer-layer', 'type': 'fill', 'source': 'buffer-result', 'paint': { 'fill-color': '#0062d2', 'fill-opacity': 0.25, 'fill-outline-color': '#003366' } }, 'boundary-layer');
-            }
-        });
-        document.getElementById('btn-clear-analysis').addEventListener('click', () => {
-            if (map.getLayer('buffer-layer')) map.setLayoutProperty('buffer-layer', 'visibility', 'none');
+        // --- STOPS LAYER ---
+        map.addLayer({
+            id: 'stops-point',
+            type: 'circle',
+            source: 'stops',
+            paint: { 'circle-color': '#f1c40f', 'circle-radius': 4, 'circle-stroke-width': 1 }
         });
 
-        // --- INTERACTION ---
-        map.on('click', 'unclustered-point', (e) => {
-            const coordinates = e.features[0].geometry.coordinates.slice();
-            const stopNum = e.features[0].properties.StopNumber;
-            const featuresAtPoint = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
-            let rows = featuresAtPoint.map(f => `<tr><td><strong>${f.properties.Route || 'N/A'}</strong></td><td>${f.properties.Effective_ || 'N/A'}</td></tr>`).join('');
-            const content = `<div class="stop-header">Stop #${stopNum}</div><table class="popup-table"><thead><tr><th>Route</th><th>Effective</th></tr></thead><tbody>${rows}</tbody></table>`;
-            new maplibregl.Popup().setLngLat(coordinates).setHTML(content).addTo(map);
+        // --- ROADS LAYER ---
+        map.addLayer({
+            id: 'roads-line',
+            type: 'line',
+            source: 'roads',
+            paint: { 'line-color': '#ff5722', 'line-width': 1.5, 'line-opacity': 0.6 }
         });
 
-        // --- BASEMAP & UI TOGGLES ---
-        const mapContainer = document.getElementById('map');
-        document.getElementById('basemap-toggle').addEventListener('click', (e) => {
-            currentBasemapIndex = (currentBasemapIndex + 1) % basemaps.length;
-            const state = basemaps[currentBasemapIndex];
-            map.setLayoutProperty('osm-layer', 'visibility', 'none');
-            map.setLayoutProperty('satellite-layer', 'visibility', 'none');
-            if (state === 'osm') {
-                map.setLayoutProperty('osm-layer', 'visibility', 'visible');
-                mapContainer.style.backgroundColor = '#ffffff';
-                e.target.innerText = 'BASEMAP: STREETS (OSM)';
-            } else if (state === 'satellite') {
-                map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-                map.moveLayer('satellite-layer', 'boundary-layer');
-                e.target.innerText = 'BASEMAP: SATELLITE';
-            } else if (state === 'none-white') {
-                mapContainer.style.backgroundColor = '#ffffff';
-                e.target.innerText = 'BASEMAP: NONE (WHITE)';
-            } else if (state === 'none-black') {
-                mapContainer.style.backgroundColor = '#111111';
-                e.target.innerText = 'BASEMAP: NONE (BLACK)';
+        // --- DISTANCE MEASURER LOGIC ---
+        map.on('click', (e) => {
+            if (!measureMode) return;
+
+            const point = [e.lngLat.lng, e.lngLat.lat];
+            measurePoints.push(point);
+
+            if (measurePoints.length > 1) {
+                const line = turf.lineString(measurePoints);
+                const length = turf.length(line, {units: 'kilometers'}).toFixed(2);
+                document.getElementById('distance-label').innerText = `Distance: ${length} km`;
+                document.getElementById('distance-label').style.display = 'block';
+
+                if (map.getSource('measure-source')) {
+                    map.getSource('measure-source').setData(line);
+                } else {
+                    map.addSource('measure-source', { type: 'geojson', data: line });
+                    map.addLayer({ id: 'measure-layer', type: 'line', source: 'measure-source', paint: { 'line-color': '#0062d2', 'line-width': 3, 'line-dasharray': [1, 1] } });
+                }
             }
         });
 
-        const setupToggle = (id, layerIds) => {
-            document.getElementById(id).addEventListener('change', (e) => {
-                const vis = e.target.checked ? 'visible' : 'none';
-                layerIds.forEach(l => map.setLayoutProperty(l, 'visibility', vis));
-            });
-        };
-        setupToggle('check-clusters', ['clusters', 'cluster-count']);
-        setupToggle('check-stops', ['unclustered-point']);
-        setupToggle('check-roads', ['roads-layer']);
-        setupToggle('check-streets', ['streets-layer']);
-        setupToggle('check-boundary', ['boundary-layer']);
-
-        map.on('click', 'clusters', (e) => {
-            map.getSource('bus-stops').getClusterExpansionZoom(e.features[0].properties.cluster_id, (err, zoom) => {
-                if (!err) map.easeTo({ center: e.features[0].geometry.coordinates, zoom: zoom });
-            });
+        // --- UI ACTIONS ---
+        document.getElementById('btn-measure').addEventListener('click', function() {
+            measureMode = !measureMode;
+            measurePoints = [];
+            this.classList.toggle('active-tool');
+            if (!measureMode) document.getElementById('distance-label').style.display = 'none';
         });
-        ['clusters', 'unclustered-point'].forEach(l => {
-            map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
-            map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
+
+        document.getElementById('check-heatmap').addEventListener('change', (e) => {
+            map.setLayoutProperty('stops-heat', 'visibility', e.target.checked ? 'visible' : 'none');
+        });
+
+        document.getElementById('btn-coverage').addEventListener('click', () => {
+            const buffered = turf.buffer(stopsData, 0.4, {units: 'kilometers'});
+            if (map.getSource('buffer')) map.getSource('buffer').setData(buffered);
+            else {
+                map.addSource('buffer', { type: 'geojson', data: buffered });
+                map.addLayer({ id: 'buffer-layer', type: 'fill', source: 'buffer', paint: { 'fill-color': '#0062d2', 'fill-opacity': 0.2 } });
+            }
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            if (map.getLayer('buffer-layer')) map.removeLayer('buffer-layer');
+            if (map.getSource('buffer')) map.removeSource('buffer');
+            if (map.getLayer('measure-layer')) map.removeLayer('measure-layer');
+            if (map.getSource('measure-source')) map.removeSource('measure-source');
+            measurePoints = [];
+            document.getElementById('distance-label').style.display = 'none';
         });
     });
 </script>
