@@ -67,10 +67,28 @@
             font-size: 10px;
         }
         .analysis-btn:hover { background: #0062d2; color: white; }
+        .active-tool { background: #0062d2 !important; color: white !important; }
         .clear-btn { border-color: #d32f2f; color: #d32f2f; background: #fff5f5; }
         .clear-btn:hover { background: #d32f2f; color: white; }
 
-        /* Scannable Popup Table */
+        /* Distance Label */
+        .distance-container {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(0, 98, 210, 0.9);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 13px;
+            display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
         .maplibregl-popup-content { font-family: Arial, sans-serif; font-size: 12px; padding: 15px; min-width: 180px; }
         .popup-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         .popup-table th { background: #f4f4f4; text-align: left; padding: 5px; font-size: 10px; text-transform: uppercase; }
@@ -79,6 +97,8 @@
     </style>
 </head>
 <body>
+
+<div id="distance-label" class="distance-container">Distance: 0.00 km</div>
 
 <div class="ui-container">
     <button id="basemap-toggle" class="toggle-btn">BASEMAP: STREETS (OSM)</button>
@@ -94,6 +114,7 @@
 
         <div class="legend-section">
             <div class="legend-section-title">Analysis Tools</div>
+            <button id="btn-measure" class="analysis-btn">MEASURE DISTANCE</button>
             <button id="btn-analyze-coverage" class="analysis-btn">CALCULATE 400M COVERAGE</button>
             <button id="btn-clear-analysis" class="analysis-btn clear-btn">DELETE RESULTS</button>
         </div>
@@ -118,6 +139,10 @@
 <script>
     const basemaps = ['osm', 'satellite', 'none-white', 'none-black'];
     let currentBasemapIndex = 0;
+
+    // Measurement State
+    let measureMode = false;
+    let measurePoints = [];
 
     const map = new maplibregl.Map({
         container: 'map',
@@ -166,7 +191,40 @@
         map.addLayer({ id: 'cluster-count', type: 'symbol', source: 'bus-stops', filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 14 }, paint: { 'text-color': '#ffffff' } });
         map.addLayer({ id: 'unclustered-point', type: 'circle', source: 'bus-stops', filter: ['!', ['has', 'point_count']], paint: { 'circle-color': '#f1c40f', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#000000' } });
 
-        // --- ANALYSIS TOOLS ---
+        // --- DISTANCE MEASURER LOGIC ---
+        map.on('click', (e) => {
+            if (!measureMode) return;
+
+            const point = [e.lngLat.lng, e.lngLat.lat];
+            measurePoints.push(point);
+
+            if (measurePoints.length > 1) {
+                const line = turf.lineString(measurePoints);
+                const length = turf.length(line, {units: 'kilometers'}).toFixed(2);
+                document.getElementById('distance-label').innerText = `Distance: ${length} km`;
+                document.getElementById('distance-label').style.display = 'block';
+
+                if (map.getSource('measure-source')) {
+                    map.getSource('measure-source').setData(line);
+                } else {
+                    map.addSource('measure-source', { type: 'geojson', data: line });
+                    map.addLayer({ id: 'measure-layer', type: 'line', source: 'measure-source', paint: { 'line-color': '#0062d2', 'line-width': 4, 'line-dasharray': [1, 1] } });
+                }
+            }
+        });
+
+        // --- UI ACTIONS ---
+        document.getElementById('btn-measure').addEventListener('click', function() {
+            measureMode = !measureMode;
+            measurePoints = []; // Reset points on toggle
+            this.classList.toggle('active-tool');
+            if (!measureMode) {
+                document.getElementById('distance-label').style.display = 'none';
+                if (map.getLayer('measure-layer')) map.removeLayer('measure-layer');
+                if (map.getSource('measure-source')) map.removeSource('measure-source');
+            }
+        });
+
         document.getElementById('btn-analyze-coverage').addEventListener('click', async () => {
             const response = await fetch('./data/stops.geojson');
             const data = await response.json();
@@ -179,21 +237,25 @@
                 map.addLayer({ 'id': 'buffer-layer', 'type': 'fill', 'source': 'buffer-result', 'paint': { 'fill-color': '#0062d2', 'fill-opacity': 0.25, 'fill-outline-color': '#003366' } }, 'boundary-layer');
             }
         });
+
         document.getElementById('btn-clear-analysis').addEventListener('click', () => {
             if (map.getLayer('buffer-layer')) map.setLayoutProperty('buffer-layer', 'visibility', 'none');
+            // Also clear distance measurement
+            measurePoints = [];
+            document.getElementById('distance-label').style.display = 'none';
+            if (map.getLayer('measure-layer')) map.removeLayer('measure-layer');
+            if (map.getSource('measure-source')) map.removeSource('measure-source');
+            document.getElementById('btn-measure').classList.remove('active-tool');
+            measureMode = false;
         });
 
-        // --- INTERACTION & FIXED POPUP LOGIC ---
+        // --- INTERACTION & POPUP LOGIC ---
         map.on('click', 'unclustered-point', (e) => {
+            if (measureMode) return; // Don't show popups during measurement
             const coordinates = e.features[0].geometry.coordinates.slice();
             const stopNum = e.features[0].properties.StopNumber;
+            const featuresAtPoint = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
 
-            // Find ALL features at the clicked point, not just the first one
-            const featuresAtPoint = map.queryRenderedFeatures(e.point, {
-                layers: ['unclustered-point']
-            });
-
-            // Create a unique list of routes based on the features found
             let rows = featuresAtPoint.map(f => `
                 <tr>
                     <td><strong>${f.properties.Route || 'N/A'}</strong></td>
@@ -209,10 +271,7 @@
                 </table>
             `;
 
-            new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(content)
-                .addTo(map);
+            new maplibregl.Popup().setLngLat(coordinates).setHTML(content).addTo(map);
         });
 
         // --- BASEMAP & UI TOGGLES ---
@@ -252,12 +311,14 @@
         setupToggle('check-boundary', ['boundary-layer']);
 
         map.on('click', 'clusters', (e) => {
+            if (measureMode) return;
             map.getSource('bus-stops').getClusterExpansionZoom(e.features[0].properties.cluster_id, (err, zoom) => {
                 if (!err) map.easeTo({ center: e.features[0].geometry.coordinates, zoom: zoom });
             });
         });
+        
         ['clusters', 'unclustered-point'].forEach(l => {
-            map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseenter', l, () => { if (!measureMode) map.getCanvas().style.cursor = 'pointer'; });
             map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
         });
     });
